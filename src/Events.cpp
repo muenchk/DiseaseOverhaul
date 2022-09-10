@@ -1,8 +1,6 @@
-#include"Events.h"
-#include "Settings.h"
 #include <string.h>
-#include<chrono>
-#include<thread>
+#include <chrono>
+#include <thread>
 #include <forward_list>
 #include <semaphore>
 #include <stdlib.h>
@@ -10,16 +8,19 @@
 #include <random>
 #include <fstream>
 #include <iostream>
-#include "ActorManipulation.h"
 #include <limits>
 #include <filesystem>
 #include <deque>
+
 #include "ActorInfo.h"
-#include <Game.h>
+#include "Game.h"
+#include "Utility.h"
+#include "Events.h"
+#include "Settings.h"
 		
 namespace Events
 {
-	using AlchemyEffect = Settings::AlchemyEffect;
+	using AlchemyEffect = AlchemyEffect;
 #define Base(x) static_cast<uint64_t>(x)
 
 	/// <summary>
@@ -45,186 +46,19 @@ namespace Events
 	static bool initialized = false;
 
 	/// <summary>
-	/// initializes importent variables, which need to be initialized every time a game is loaded
+	/// enables all active functions
 	/// </summary>
-	void InitializeCompatibilityObjects()
-	{ /*
-		// now that the game was loaded we can try to initialize all our variables we conuldn't before
-		if (!initialized) {
-			// if we are in com mode, try to find the needed items. If we cannot find them, deactivate comp mode
-			if (Settings::_CompatibilityPotionAnimatedFx) {
-				RE::TESForm* tmp = RE::TESForm::LookupByEditorID(std::string_view{ Settings::Compatibility::PAF_NPCDrinkingCoolDownEffect_name });
-				if (tmp)
-					Settings::Compatibility::PAF_NPCDrinkingCoolDownEffect = tmp->As<RE::EffectSetting>();
-				tmp = RE::TESForm::LookupByEditorID(std::string_view{ Settings::Compatibility::PAF_NPCDrinkingCoolDownSpell_name });
-				if (tmp)
-					Settings::Compatibility::PAF_NPCDrinkingCoolDownSpell = tmp->As<RE::SpellItem>();
-				if (!(Settings::Compatibility::PAF_NPCDrinkingCoolDownEffect && Settings::Compatibility::PAF_NPCDrinkingCoolDownSpell)) {
-					Settings::_CompatibilityPotionAnimatedFx = false;
-					Settings::_CompatibilityPotionAnimatedFX_UseAnimations = false;
-					logger::info("[INIT] Some Forms from PotionAnimatedfx.esp seem to be missing. Forcefully deactivated compatibility mode");
-				}
-			}
-			// if compatibility mode for PotionnAnimatedFx is activated to use the animations, send events
-			// with required variables to the papyrus scripts
-			if (Settings::_CompatibilityPotionAnimatedFX_UseAnimations) {
-				auto evs = SKSE::GetModCallbackEventSource();
-
-				LOG_1("{}[LoadGameEvent] Setting variables for compatibility with PotionAnimatedfx.esp");
-				SKSE::ModCallbackEvent* ev = nullptr;
-				// send mod events to fill ALL the missing variables
-				// since there are multiple plugins with the same name
-				// and the same editor ids, but with different form
-				// ids and we may only query FormIDs in papyrus
-
-				LOG_4("{}[LoadGameEvent] Set 1");
-				// PAF_DrinkSFX
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_DrinkSFX");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_DrinkSFX" })->As<RE::TESGlobal>();
-					evs->SendEvent(ev);
-				}
-				LOG_4("{}[LoadGameEvent] Set 2");
-				// PAF_NPCDrinkingSlowVersion
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_NPCDrinkingSlowVersion");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_NPCDrinkingSlowVersion" })->As<RE::TESGlobal>();
-					evs->SendEvent(ev);
-				}
-				LOG_4("{}[LoadGameEvent] Set 3");
-				// PAF_NPCFleeChance
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_NPCFleeChance");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_NPCFleeChance" })->As<RE::TESGlobal>();
-					evs->SendEvent(ev);
-				}
-				LOG_4("{}[LoadGameEvent] Set 6");
-				// PAF_NPCDrinkingCoolDownSpell
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_NPCDrinkingCoolDownSpell");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_NPCDrinkingCoolDownSpell" })->As<RE::SpellItem>();
-					evs->SendEvent(ev);
-				}
-				LOG_4("{}[LoadGameEvent] Set 7");
-				// PAF_NPCDrinkingInterruptDetectAbility
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_NPCDrinkingInterruptDetectAbility");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_NPCDrinkingInterruptDetectAbility" })->As<RE::SpellItem>();
-					evs->SendEvent(ev);
-				}
-				LOG_4("{}[LoadGameEvent] Set 8");
-				// PAF_NPCDrinkFleeSpell
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_NPCDrinkFleeSpell");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_NPCDrinkFleeSpell" })->As<RE::SpellItem>();
-					evs->SendEvent(ev);
-				}
-				LOG_4("{}[LoadGameEvent] Set 9");
-				// PAF_NPCDrinkingInterruptSpell
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_NPCDrinkingInterruptSpell");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_NPCDrinkingInterruptSpell" })->As<RE::SpellItem>();
-					evs->SendEvent(ev);
-				}
-				LOG_4("{}[LoadGameEvent] Set 10");
-				// PAF_NPCDrinkingCoolDownEffect
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_NPCDrinkingCoolDownEffect");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_NPCDrinkingCoolDownEffect" })->As<RE::EffectSetting>();
-					evs->SendEvent(ev);
-				}
-				LOG_4("{}[LoadGameEvent] Set 11");
-				// PAF_NPCDrinkingInterruptDetectEffect
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_NPCDrinkingInterruptDetectEffect");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_NPCDrinkingInterruptDetectEffect" })->As<RE::EffectSetting>();
-					evs->SendEvent(ev);
-				}
-				LOG_4("{}[LoadGameEvent] Set 12");
-				// PAF_NPCDrinkFleeEffect
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_NPCDrinkFleeEffect");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_NPCDrinkFleeEffect" })->As<RE::EffectSetting>();
-					evs->SendEvent(ev);
-				}
-				LOG_4("{}[LoadGameEvent] Set 13");
-				// PAF_NPCDrinkingInterruptEffect
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_NPCDrinkingInterruptEffect");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_NPCDrinkingInterruptEffect" })->As<RE::EffectSetting>();
-					evs->SendEvent(ev);
-				}
-				LOG_4("{}[LoadGameEvent] Set 14");
-				// PAF_MCMQuest
-				{
-					ev = new SKSE::ModCallbackEvent();
-					ev->eventName = RE::BSFixedString("NDP_Comp_PAF_MCMQuest");
-					ev->strArg = RE::BSFixedString("");
-					ev->numArg = 0.0f;
-					ev->sender = Look(std::string_view{ "PAF_MCMQuest" })->As<RE::TESQuest>();
-					evs->SendEvent(ev);
-				}
-
-				// send control event to enable compatibility mode and check the delivered objects
-				ev = new SKSE::ModCallbackEvent();
-				ev->eventName = RE::BSFixedString("NPCsDrinkPotionCompPAFX");
-				ev->strArg = RE::BSFixedString("");
-				ev->numArg = 1.0f;
-				ev->sender = nullptr;
-				evs->SendEvent(ev);
-				LOG_4("{}[LoadGameEvent] Sent controlevent");
-			}
-			initialized = true;
-		}*/
-	}
-
-	/// <summary>
-	/// Processes TESHitEvents
-	/// </summary>
-	/// <param name=""></param>
-	/// <param name=""></param>
-	/// <returns></returns>
-	EventResult EventHandler::ProcessEvent(const RE::TESHitEvent* /*a_event*/, RE::BSTEventSource<RE::TESHitEvent>*)
-	{
-		// currently unused
+	static bool enableProcessing = false;
+#define EvalProcessing()   \
+	if (!enableProcessing) \
+		return;
+#define EvalProcessingEvent() \
+	if (!enableProcessing)    \
 		return EventResult::kContinue;
+	bool CanProcess()
+	{
+		return enableProcessing;
 	}
-
-	// Actor, health cooldown, magicka cooldown, stamina cooldown, other cooldown, reg cooldown
-	// static std::vector<std::tuple<RE::Actor*, int, int, int, int, int>> aclist{};
 
 	/// <summary>
 	/// list that holds currently handled actors
@@ -250,28 +84,70 @@ namespace Events
 	/// </summary>
 	static bool playerdied = false;
 
+	/// <summary>
+	/// initializes importent variables, which need to be initialized every time a game is loaded
+	/// </summary>
+	void InitializeCompatibilityObjects()
+	{ /*
+		// now that the game was loaded we can try to initialize all our variables we conuldn't before
+		if (!initialized) {
+			// if we are in com mode, try to find the needed items. If we cannot find them, deactivate comp mode
+			if (Settings::_CompatibilityPotionAnimatedFx) {
+				RE::TESForm* tmp = RE::TESForm::LookupByEditorID(std::string_view{ Settings::Compatibility::PAF_NPCDrinkingCoolDownEffect_name });
+				if (tmp)
+					Settings::Compatibility::PAF_NPCDrinkingCoolDownEffect = tmp->As<RE::EffectSetting>();
+				tmp = RE::TESForm::LookupByEditorID(std::string_view{ Settings::Compatibility::PAF_NPCDrinkingCoolDownSpell_name });
+				if (tmp)
+					Settings::Compatibility::PAF_NPCDrinkingCoolDownSpell = tmp->As<RE::SpellItem>();
+				if (!(Settings::Compatibility::PAF_NPCDrinkingCoolDownEffect && Settings::Compatibility::PAF_NPCDrinkingCoolDownSpell)) {
+					Settings::_CompatibilityPotionAnimatedFx = false;
+					Settings::_CompatibilityPotionAnimatedFX_UseAnimations = false;
+					logger::info("[INIT] Some Forms from PotionAnimatedfx.esp seem to be missing. Forcefully deactivated compatibility mode");
+				}
+			}
+			initialized = true;
+		}*/
+	}
+
 	ActorInfo* FindActor(RE::Actor* actor)
 	{
 		ActorInfo* acinfo = nullptr;
 		auto itr = actorinfoMap.find(actor->GetFormID());
-		if (itr == actorinfoMap.end() || itr->second == nullptr) {
+		if (itr == actorinfoMap.end()) {
 			acinfo = new ActorInfo(actor, 0, 0, 0, 0, 0);
 			actorinfoMap.insert_or_assign(actor->GetFormID(), acinfo);
-		} else
+		} else if (itr->second == nullptr || itr->second->actor == nullptr || itr->second->actor->GetFormID() == 0 || itr->second->actor->GetFormID() != actor->GetFormID()) {
+			// either delete acinfo, deleted actor, actor fid 0 or acinfo belongs to wrong actor
+			actorinfoMap.erase(actor->GetFormID());
+			acinfo = new ActorInfo(actor, 0, 0, 0, 0, 0);
+			actorinfoMap.insert_or_assign(actor->GetFormID(), acinfo);
+		} else {
 			acinfo = itr->second;
+			if (acinfo->citems == nullptr)
+				acinfo->citems = new ActorInfo::CustomItems();
+		}
 		return acinfo;
 	}
 
-#define CheckDeadEvent      \
-	if (playerdied == true) \
-		return EventResult::kContinue;
-
-#define ReEvalPlayerDeath \
+#define ReEvalPlayerDeath                                         \
 	if (RE::PlayerCharacter::GetSingleton()->IsDead() == false) { \
-		playerdied = false; \
-	} \
-	else {                                                      \
-		playerdied = true; \
+		playerdied = false;                                       \
+	} else {                                                      \
+		playerdied = true;                                        \
+	}
+
+	/// <summary>
+	/// Processes TESHitEvents
+	/// </summary>
+	/// <param name=""></param>
+	/// <param name=""></param>
+	/// <returns></returns>
+	EventResult EventHandler::ProcessEvent(const RE::TESHitEvent* /*a_event*/, RE::BSTEventSource<RE::TESHitEvent>*)
+	{
+		EvalProcessingEvent();
+		LOG_1("{}[Events] [TESHitEvent]");
+		// currently unused
+		return EventResult::kContinue;
 	}
 
 	/// <summary>
@@ -284,7 +160,8 @@ namespace Events
 	/// <returns></returns>
 	EventResult EventHandler::ProcessEvent(const RE::TESDeathEvent* a_event, RE::BSTEventSource<RE::TESDeathEvent>*)
 	{
-		CheckDeadEvent;
+		EvalProcessingEvent();
+		LOG_1("{}[Events] [DeathEvent]");
 		ReEvalPlayerDeath;
 		InitializeCompatibilityObjects();
 		auto actor = a_event->actorDying->As<RE::Actor>();
@@ -293,9 +170,9 @@ namespace Events
 		} else
 		if (actor && actor != RE::PlayerCharacter::GetSingleton()) {
 			// as with potion distribution, exlude excluded actors and potential followers
-			if (!Settings::Distribution::ExcludedNPC(actor) && deads.contains(actor->GetFormID()) == false) {
+			if (!Distribution::ExcludedNPC(actor) && deads.contains(actor->GetFormID()) == false) {
 				// create and insert new event
-				CheckDeadEvent;
+				EvalProcessingEvent();
 				ActorInfo* acinfo = FindActor(actor);
 				deads.insert(actor->GetFormID());
 				// distribute death items
@@ -316,35 +193,84 @@ namespace Events
 		return EventResult::kContinue;
 	}
 
-    /// <summary>
-    /// handles TESCombatEvent
-	/// registers the actor for tracking and handles giving them potions, poisons and food, beforehand.
-	/// also makes then eat food before the fight.
-    /// </summary>
-    /// <param name="a_event">event parameters like the actor we need to handle</param>
-    /// <param name=""></param>
-    /// <returns></returns>
-    EventResult EventHandler::ProcessEvent(const RE::TESCombatEvent* a_event, RE::BSTEventSource<RE::TESCombatEvent>*)
+	/// <summary>
+	/// EventHandler for Harvested Items
+	/// </summary>
+	/// <param name="a_event"></param>
+	/// <param name="a_eventSource"></param>
+	/// <returns></returns>
+	EventResult EventHandler::ProcessEvent(const RE::TESHarvestedEvent::ItemHarvested* a_event, RE::BSTEventSource<RE::TESHarvestedEvent::ItemHarvested>*)
 	{
-		CheckDeadEvent;
+		EvalProcessingEvent();
+		LOG_1("{}[Events] [HarvestEvent]");
+		ReEvalPlayerDeath;
+		// check that all event fields are valid
+		if (a_event && a_event->produceItem && a_event->harvester) {
+			LOG2_1("{}[Events] [HarvestEvent] harvested: {} {}", Utility::GetHex(a_event->produceItem->GetFormID()), a_event->produceItem->GetName());
+			auto itr = Settings::AlchExtRuntime::harvestMap()->find(a_event->produceItem->GetFormID());
+			if (itr != Settings::AlchExtRuntime::harvestMap()->end()) {
+				auto vec = itr->second;
+				auto iter = vec.begin();
+				while (iter != vec.end()) {
+					if (*iter == nullptr) {
+						// error item not valid, clean up vector
+						iter = vec.erase(iter);
+						Settings::AlchExtRuntime::harvestMap()->insert_or_assign(a_event->produceItem->GetFormID(), vec);
+					} else if ((*iter)->object == nullptr) {
+						delete *iter;
+						iter = vec.erase(iter);
+						Settings::AlchExtRuntime::harvestMap()->insert_or_assign(a_event->produceItem->GetFormID(), vec);
+					} else {
+						for (int x = 0; x < (*iter)->num; x++) {
+							if (rand100(rand) < (*iter)->chance) {
+								RE::ExtraDataList* extra = new RE::ExtraDataList();
+								extra->SetOwner(a_event->harvester);
+								a_event->harvester->AddObjectToContainer((*iter)->object, extra, 1, nullptr);
+							}
+						}
+					}
+					iter++;
+				}
+			}
+		}
+
+		return EventResult::kContinue;
+	}
+
+	/// <summary>
+	/// EventHandler for Debug purposes. It calculates the distribution rules for all npcs in the cell
+	/// </summary>
+	/// <param name="a_event"></param>
+	/// <param name="a_eventSource"></param>
+	/// <returns></returns>
+	EventResult EventHandler::ProcessEvent(const RE::TESEquipEvent* /*a_event*/, RE::BSTEventSource<RE::TESEquipEvent>*)
+	{
+		EvalProcessingEvent();
+		LOG_1("{}[Events] [EquipEvent]");
 		ReEvalPlayerDeath;
 
 		return EventResult::kContinue;
-    }
+	}
 
 	/// <summary>
-	/// [true] if the actorhandler is running, [false] if the thread died
+	/// EventHandler for Actors being attached / detached
 	/// </summary>
-	static bool actorhandlerrunning = false;
-	/// <summary>
-	/// thread running the CheckActors function
-	/// </summary>
-	static std::thread* actorhandler = nullptr;
+	/// <param name="a_event"></param>
+	/// <param name="a_eventSource"></param>
+	/// <returns></returns>
+	EventResult EventHandler::ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>*)
+	{
+		EvalProcessingEvent();
+		LOG_1("{}[Events] [TESCellAttachDetachEvent]");
+		ReEvalPlayerDeath;
 
+		if (a_event && a_event->reference) {
+			RE::Actor* actor = a_event->reference->As<RE::Actor>();
+			if (actor) {
+			}
+		}
 
-#define CheckDeadCheckHandlerLoop \
-	if (playerdied) { \
-		break; \
+		return EventResult::kContinue;
 	}
 
 
@@ -356,53 +282,45 @@ namespace Events
 	/// <returns></returns>
 	EventResult EventHandler::ProcessEvent(const RE::TESLoadGameEvent*, RE::BSTEventSource<RE::TESLoadGameEvent>*)
 	{
-		LOG_1("{}[LoadGameEvent]");
+		LOG_1("{}[Events] [LoadGameEvent]");
 		// if we canceled the main thread, reset that
 		initialized = false;
-		// reset regsitered actors, since we skip unregister events after player has died
-		sem.acquire();
-		for (int i = 0; i < aclist.size(); i++) {
-			delete aclist[i];
-		}
-		aclist.clear();
-		sem.release();
 		// set player to alive
 		ReEvalPlayerDeath;
-		// reset actor lastDistrTime until it is saved in save game
-		sem.acquire();
-		auto itr = actorinfoMap.begin();
-		while (itr != actorinfoMap.end()) {
-			itr->second->lastDistrTime = 0.0f;
-		}
-		sem.release();
 		// reset the list of actors that died
 		deads.clear();
+		
+		enableProcessing = true;
 
 		return EventResult::kContinue;
 	}
 
 	void LoadGameCallback(SKSE::SerializationInterface* /*a_intfc*/)
 	{
-		LOG_1("{}[LoadGameCallback]");
+		LOG_1("{}[Events] [LoadGameCallback]");
 	}
 
 	void SaveGameCallback(SKSE::SerializationInterface* /*a_intfc*/)
 	{
-		LOG_1("{}[SaveGameCallback]");
+		LOG_1("{}[Events] [SaveGameCallback]");
 	}
-	
-	/// <summary>
-	/// EventHandler for Debug purposes. It calculates the distribution rules for all npcs in the cell
-	/// </summary>
-	/// <param name="a_event"></param>
-	/// <param name="a_eventSource"></param>
-	/// <returns></returns>
-	EventResult EventHandler::ProcessEvent(const RE::TESEquipEvent* a_event, RE::BSTEventSource<RE::TESEquipEvent>*)
-	{
-		CheckDeadEvent;
-		ReEvalPlayerDeath;
 
-		return EventResult::kContinue;
+	void RevertGameCallback(SKSE::SerializationInterface* /*a_intfc*/)
+	{
+		LOG_1("{}[Events] [Events] [RevertGameCallback]");
+		enableProcessing = false;
+		auto itr = actorinfoMap.begin();
+		while (itr != actorinfoMap.end()) {
+			if (itr->second != nullptr)
+				try {
+					delete itr->second;
+				} catch (std::exception&) {}
+			itr++;
+		}
+		// reset actor information
+		actorinfoMap.clear();
+		// reset actor processing list
+		aclist.clear();
 	}
 
     /// <summary>
@@ -429,10 +347,13 @@ namespace Events
 		LOG1_1("{}Registered {}", typeid(RE::TESEquipEvent).name());
 		scriptEventSourceHolder->GetEventSource<RE::TESDeathEvent>()->AddEventSink(EventHandler::GetSingleton());
 		LOG1_1("{}Registered {}", typeid(RE::TESDeathEvent).name());
-		scriptEventSourceHolder->GetEventSource<RE::TESActorLocationChangeEvent>()->AddEventSink(Eventhandler::GetSingleton());
-		LOG1_1("{}Registered {}", typeid(RE::TESDeathEvent).name());
+		scriptEventSourceHolder->GetEventSource<RE::TESCellAttachDetachEvent>()->AddEventSink(EventHandler::GetSingleton());
+		LOG1_1("{}Registered {}", typeid(RE::TESCellAttachDetachEvent).name());
+		RE::TESHarvestedEvent::GetEventSource()->AddEventSink(EventHandler::GetSingleton());
+		LOG1_1("{}Registered {}", typeid(RE::TESHarvestedEvent::ItemHarvested).name());
 		Game::SaveLoad::GetSingleton()->RegisterForLoadCallback(0xFF000001, LoadGameCallback);
-		Game::SaveLoad::GetSingleton()->RegisterForLoadCallback(0xFF000002, SaveGameCallback);
+		Game::SaveLoad::GetSingleton()->RegisterForSaveCallback(0xFF000002, SaveGameCallback);
+		Game::SaveLoad::GetSingleton()->RegisterForRevertCallback(0xFF000003, RevertGameCallback);
 	}
 
 	/// <summary>
@@ -459,7 +380,8 @@ namespace Events
 		sem.acquire();
 		auto itr = actorinfoMap.begin();
 		while (itr != actorinfoMap.end()) {
-			itr->second->_boss = false;
+			if (itr->second)
+				itr->second->_boss = false;
 			itr->second->citems->Reset();
 		}
 		sem.release();

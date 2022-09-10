@@ -1,8 +1,7 @@
-#include "Hooks.h"
 #include "Events.h"
 #include "Settings.h"
-#include "Console.h"
 #include "Game.h"
+#include "Interface/NUPInterface.h"
 
 namespace
 {
@@ -73,22 +72,24 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface * 
 
 void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
-	if (a_msg->type == SKSE::MessagingInterface::kDataLoaded) {
+	switch(a_msg->type) {
+	case SKSE::MessagingInterface::kDataLoaded:
 		// load settings
-		Settings::Load(); // also resaves the file
+		Settings::LoadNUP(); 
+		Settings::LoadAlchExt();  // also resaves the file
 		logger::info("Settings loaded");
 		// load distribution settings
 		Settings::LoadDistrConfigNUP();
 		Settings::LoadDistrConfigAlchExt();
 		logger::info("Distribution configuration loaded");
-		// classify currently loaded game items
-		Settings::ClassifyItems();
-		logger::info("Items classified");
 		// register eventhandlers
 		Events::RegisterAllEventHandlers();
 		logger::info("Registered Events");
 		// register console commands
-		
+		break;
+	case SKSE::MessagingInterface::kPostLoad:
+		Settings::Interfaces::RequestAPIs();
+		break;
 	}
 }
 

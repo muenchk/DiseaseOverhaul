@@ -1,8 +1,10 @@
 {
   "ExpandedNodes": [
     "",
+    "\\include",
+    "\\include\\Interface",
     "\\src"
   ],
-  "SelectedNode": "\\src",
+  "SelectedNode": "\\src\\Settings.cpp",
   "PreviewInSolutionExplorer": false
 }

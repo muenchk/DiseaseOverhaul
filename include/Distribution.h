@@ -1,5 +1,6 @@
 #pragma once
 #include "AlchemyEffect.h"
+#include "ActorInfo.h"
 
 /// <summary>
 /// Class handling all functions related to item distribution
@@ -20,6 +21,9 @@ public:
 		kItem = 32,
 		kClass = 64,
 		kCombatStyle = 128,
+		kCell = 256,
+		kWeather = 512,
+		kTextureSet = 1024,
 	};
 
 	class CustomItemStorage;
@@ -160,7 +164,47 @@ public:
 			validFortifyPotions{ _validFortifyPotions },
 			validFood{ _validFood }
 		{}
-		Rule() {}
+		Rule() 
+		{
+			this->allowMixed = false;
+			this->assocObjects = "";
+			this->foodChance = { 0, 0, 0, 0, 0 };
+			this->foodDistr = {};
+			this->foodDistrChance = {};
+			this->foodProperties = "";
+			this->fortify1Chance = { 0, 0, 0, 0, 0 };
+			this->fortify2Chance = { 0, 0, 0, 0, 0 };
+			this->fortifyDistr = {};
+			this->fortifyDistrChance = {};
+			this->fortifyproperties = "";
+			this->maxPoisons = 0;
+			this->maxPotions = 0;
+			potion1Chance = { 0, 0, 0, 0, 0 };
+			potion2Chance = { 0, 0, 0, 0, 0 };
+			potion3Chance = { 0, 0, 0, 0, 0 };
+			potionAdditionalChance = { 0, 0, 0, 0, 0 };
+			potionDistr = {};
+			potionDistrChance = {};
+			potionProperties = "";
+			potionTierAdjust = 0;
+			poison1Chance = { 0, 0, 0, 0, 0 };
+			poison2Chance = { 0, 0, 0, 0, 0 };
+			poison3Chance = { 0, 0, 0, 0, 0 };
+			poisonAdditionalChance = { 0, 0, 0, 0, 0 };
+			poisonDistr = {};
+			poisonDistrChance = {};
+			poisonProperties = "";
+			poisonTierAdjust = 0;
+			ruleName = "empty";
+			rulePriority = 0;
+			ruleType = 0;
+			ruleVersion = 0;
+			this->valid = true;
+			validFood = 0;
+			validFortifyPotions = 0;
+			validPoisons = 0;
+			validPotions = 0;
+		}
 		/// <summary>
 		/// initializes an empty rule
 		/// </summary>
@@ -347,12 +391,13 @@ public:
 	static bool ExcludedNPC(RE::TESNPC* npc);
 	friend void Settings::LoadDistrConfigNUP();
 	friend void Settings::LoadDistrConfigAlchExt();
+	friend Settings;
+	friend void ActorInfo::CalcCustomItems();
 	friend void ActorInfo::CalcCustomItems();
 
 private:
 	static Rule* CalcRule(RE::TESNPC* actor, ActorStrength& acs, ItemStrength& is, NPCTPLTInfo* tpltinfo = nullptr, CustomItemStorage* custItems = nullptr);
 	static Rule* CalcRule(ActorInfo* acinfo, NPCTPLTInfo* tpltinfo = nullptr);
-	static std::vector<std::tuple<int, Distribution::Rule*, std::string>> CalcAllRules(RE::Actor* actor, ActorStrength& acs, ItemStrength& is);
 
 	static Rule* FindRule(std::string name)
 	{

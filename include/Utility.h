@@ -3,11 +3,11 @@
 #include <iostream>
 #include <string>
 #include <sstream>
-#include <tuple>
-#include <utility>
-
 #include "Settings.h"
 #include "Distribution.h"
+#include "ActorInfo.h"
+#include <tuple>
+#include <utility>
 
 #define Base(x) static_cast<uint64_t>(x)
 
@@ -565,6 +565,8 @@ public:
 	/// <param name="acinfo">ActorInfo to verify</param>
 	/// </summary>
 	static bool VerifyActorInfo(ActorInfo* acinfo);
+
+	static const char* GetPluginName(RE::TESForm* form);
 	#pragma endregion
 
 };

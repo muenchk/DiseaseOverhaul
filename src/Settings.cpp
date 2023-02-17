@@ -11,7 +11,8 @@
 #include <vector>
 
 #include "Settings.h"
-#include "Utility.h"
+#include "Data.h"
+#include "UtilityAlch.h"
 
 using ActorStrength = ActorStrength;
 using AlchemyEffect = AlchemyEffect;
@@ -48,6 +49,15 @@ void Settings::LoadGameObjects()
 	if (Settings::GameObj::VendorItemFoodRaw == nullptr) {
 		logger::info("[INIT] Couldn't find VendorItemFoodRaw Keyword in game.");
 	}
+	Settings::GameObj::ActorTypeDwarven = RE::TESForm::LookupByID<RE::BGSKeyword>(0x1397A);
+	if (Settings::GameObj::ActorTypeDwarven == nullptr) {
+		logger::info("[INIT] Couldn't find ActorTypeDwarven Keyword in game.");
+	}
+	Settings::GameObj::Vampire = RE::TESForm::LookupByID<RE::BGSKeyword>(0xA82BB);
+	if (Settings::GameObj::ActorTypeDwarven == nullptr) {
+		logger::info("[INIT] Couldn't find Vampire Keyword in game.");
+	}
+
 	Settings::GameObj::CurrentFollowerFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x0005C84E);
 	if (Settings::GameObj::CurrentFollowerFaction == nullptr) {
 		logger::info("[INIT] Couldn't find CurrentFollowerFaction Faction in game.");
@@ -56,10 +66,21 @@ void Settings::LoadGameObjects()
 	if (Settings::GameObj::CurrentHirelingFaction == nullptr) {
 		logger::info("[INIT] Couldn't find CurrentHirelingFaction Faction in game.");
 	}
-	Settings::GameObj::ActorTypeDwarven = RE::TESForm::LookupByID<RE::BGSKeyword>(0x1397A);
-	if (Settings::GameObj::ActorTypeDwarven == nullptr) {
-		logger::info("[INIT] Couldn't find ActorTypeDwarven Keyword in game.");
+	Settings::GameObj::WerewolfFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x43594);
+	if (Settings::GameObj::CurrentHirelingFaction == nullptr) {
+		logger::info("[INIT] Couldn't find WerewolfFaction Faction in game.");
 	}
+	Settings::GameObj::CreatureFaction = RE::TESForm::LookupByID<RE::TESFaction>(0x13);
+	if (Settings::GameObj::CurrentHirelingFaction == nullptr) {
+		logger::info("[INIT] Couldn't find CfreatureFaction Faction in game.");
+	}
+
+	Settings::GameObj::WerewolfImmunity = RE::TESForm::LookupByID<RE::SpellItem>(0xF5BA0);
+	if (Settings::GameObj::ActorTypeDwarven == nullptr) {
+		logger::info("[INIT] Couldn't find WerewolfImmunity Spell in game.");
+	}
+
+	/// load disease objects
 }
 
 void Settings::LoadDistrConfigNUP()
@@ -205,7 +226,7 @@ void Settings::LoadDistrConfigNUP()
 										continue;
 									}
 									// now comes Potion1Chance
-									rule->potion1Chance = Utility::ParseIntArray(splits->at(splitindex));
+									rule->potion1Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
 									splitindex++;
 									if (rule->potion1Chance.size() == 0) {
 										logger::warn("[Settings] [LoadDistrRules] fiels \"Potion1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
@@ -214,7 +235,7 @@ void Settings::LoadDistrConfigNUP()
 										continue;
 									}
 									// now comes Potion2Chance
-									rule->potion2Chance = Utility::ParseIntArray(splits->at(splitindex));
+									rule->potion2Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
 									splitindex++;
 									if (rule->potion2Chance.size() == 0) {
 										logger::warn("[Settings] [LoadDistrRules] fiels \"Potion2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
@@ -223,7 +244,7 @@ void Settings::LoadDistrConfigNUP()
 										continue;
 									}
 									// now comes Potion3Chance
-									rule->potion3Chance = Utility::ParseIntArray(splits->at(splitindex));
+									rule->potion3Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
 									splitindex++;
 									if (rule->potion3Chance.size() == 0) {
 										logger::warn("[Settings] [LoadDistrRules] fiels \"Potion3Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
@@ -232,7 +253,7 @@ void Settings::LoadDistrConfigNUP()
 										continue;
 									}
 									// now comes PotionAddChance
-									rule->potionAdditionalChance = Utility::ParseIntArray(splits->at(splitindex));
+									rule->potionAdditionalChance = UtilityAlch::ParseIntArray(splits->at(splitindex));
 									splitindex++;
 									if (rule->potionAdditionalChance.size() == 0) {
 										logger::warn("[Settings] [LoadDistrRules] fiels \"PotionAddChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
@@ -257,7 +278,7 @@ void Settings::LoadDistrConfigNUP()
 										continue;
 									}
 									// now comes Fortify1Chance
-									rule->fortify1Chance = Utility::ParseIntArray(splits->at(splitindex));
+									rule->fortify1Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
 									splitindex++;
 									if (rule->fortify1Chance.size() == 0) {
 										logger::warn("[Settings] [LoadDistrRules] fiels \"Fortify1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
@@ -266,7 +287,7 @@ void Settings::LoadDistrConfigNUP()
 										continue;
 									}
 									// now comes Fortify2Chance
-									rule->fortify2Chance = Utility::ParseIntArray(splits->at(splitindex));
+									rule->fortify2Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
 									splitindex++;
 									if (rule->fortify2Chance.size() == 0) {
 										logger::warn("[Settings] [LoadDistrRules] fiels \"Fortify2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
@@ -291,7 +312,7 @@ void Settings::LoadDistrConfigNUP()
 										continue;
 									}
 									// now comes Poison1Chance
-									rule->poison1Chance = Utility::ParseIntArray(splits->at(splitindex));
+									rule->poison1Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
 									splitindex++;
 									if (rule->poison1Chance.size() == 0) {
 										logger::warn("[Settings] [LoadDistrRules] fiels \"Poison1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
@@ -300,7 +321,7 @@ void Settings::LoadDistrConfigNUP()
 										continue;
 									}
 									// now comes Poison2Chance
-									rule->poison2Chance = Utility::ParseIntArray(splits->at(splitindex));
+									rule->poison2Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
 									splitindex++;
 									if (rule->poison2Chance.size() == 0) {
 										logger::warn("[Settings] [LoadDistrRules] fiels \"Poison2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
@@ -309,7 +330,7 @@ void Settings::LoadDistrConfigNUP()
 										continue;
 									}
 									// now comes Poison3Chance
-									rule->poison3Chance = Utility::ParseIntArray(splits->at(splitindex));
+									rule->poison3Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
 									splitindex++;
 									if (rule->poison3Chance.size() == 0) {
 										logger::warn("[Settings] [LoadDistrRules] fiels \"Poison3Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
@@ -318,7 +339,7 @@ void Settings::LoadDistrConfigNUP()
 										continue;
 									}
 									// now comes PoisonAddChance
-									rule->poisonAdditionalChance = Utility::ParseIntArray(splits->at(splitindex));
+									rule->poisonAdditionalChance = UtilityAlch::ParseIntArray(splits->at(splitindex));
 									splitindex++;
 									if (rule->poisonAdditionalChance.size() == 0) {
 										logger::warn("[Settings] [LoadDistrRules] fiels \"PoisonAddChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
@@ -344,7 +365,7 @@ void Settings::LoadDistrConfigNUP()
 									}
 
 									// now comes FoodChance
-									rule->foodChance = Utility::ParseIntArray(splits->at(splitindex));
+									rule->foodChance = UtilityAlch::ParseIntArray(splits->at(splitindex));
 									splitindex++;
 									if (rule->foodChance.size() == 0) {
 										logger::warn("[Settings] [LoadDistrRules] fiels \"FoodChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
@@ -374,29 +395,29 @@ void Settings::LoadDistrConfigNUP()
 									bool error = false;
 
 									// parse the associated objects
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> objects = Utility::ParseAssocObjects(rule->assocObjects, error, file, line);
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> objects = UtilityAlch::ParseAssocObjects(rule->assocObjects, error, file, line);
 
 									// parse the item properties
-									std::vector<std::tuple<uint64_t, float>> potioneffects = Utility::ParseAlchemyEffects(rule->potionProperties, error);
-									rule->potionDistr = Utility::GetDistribution(potioneffects, RandomRange);
-									rule->potionDistrChance = Utility::GetDistribution(potioneffects, RandomRange, true);
+									std::vector<std::tuple<uint64_t, float>> potioneffects = UtilityAlch::ParseAlchemyEffects(rule->potionProperties, error);
+									rule->potionDistr = UtilityAlch::GetDistribution(potioneffects, RandomRange);
+									rule->potionDistrChance = UtilityAlch::GetDistribution(potioneffects, RandomRange, true);
 									LOGE2_2("[Settings] [LoadDistrRules] rule {} contains {} potion effects", rule->ruleName, rule->potionDistr.size());
-									rule->validPotions = Utility::SumAlchemyEffects(rule->potionDistr, true);
-									std::vector<std::tuple<uint64_t, float>> poisoneffects = Utility::ParseAlchemyEffects(rule->poisonProperties, error);
-									rule->poisonDistr = Utility::GetDistribution(poisoneffects, RandomRange);
-									rule->poisonDistrChance = Utility::GetDistribution(poisoneffects, RandomRange, true);
+									rule->validPotions = UtilityAlch::SumAlchemyEffects(rule->potionDistr, true);
+									std::vector<std::tuple<uint64_t, float>> poisoneffects = UtilityAlch::ParseAlchemyEffects(rule->poisonProperties, error);
+									rule->poisonDistr = UtilityAlch::GetDistribution(poisoneffects, RandomRange);
+									rule->poisonDistrChance = UtilityAlch::GetDistribution(poisoneffects, RandomRange, true);
 									LOGE2_2("[Settings] [LoadDistrRules] rule {} contains {} poison effects", rule->ruleName, rule->poisonDistr.size());
-									rule->validPoisons = Utility::SumAlchemyEffects(rule->poisonDistr, true);
-									std::vector<std::tuple<uint64_t, float>> fortifyeffects = Utility::ParseAlchemyEffects(rule->fortifyproperties, error);
-									rule->fortifyDistr = Utility::GetDistribution(fortifyeffects, RandomRange);
-									rule->fortifyDistrChance = Utility::GetDistribution(fortifyeffects, RandomRange, true);
+									rule->validPoisons = UtilityAlch::SumAlchemyEffects(rule->poisonDistr, true);
+									std::vector<std::tuple<uint64_t, float>> fortifyeffects = UtilityAlch::ParseAlchemyEffects(rule->fortifyproperties, error);
+									rule->fortifyDistr = UtilityAlch::GetDistribution(fortifyeffects, RandomRange);
+									rule->fortifyDistrChance = UtilityAlch::GetDistribution(fortifyeffects, RandomRange, true);
 									LOGE2_2("[Settings] [LoadDistrRules] rule {} contains {} fortify potion effects", rule->ruleName, rule->fortifyDistr.size());
-									rule->validFortifyPotions = Utility::SumAlchemyEffects(rule->fortifyDistr, true);
-									std::vector<std::tuple<uint64_t, float>> foodeffects = Utility::ParseAlchemyEffects(rule->foodProperties, error);
-									rule->foodDistr = Utility::GetDistribution(foodeffects, RandomRange);
-									rule->foodDistrChance = Utility::GetDistribution(foodeffects, RandomRange, true);
+									rule->validFortifyPotions = UtilityAlch::SumAlchemyEffects(rule->fortifyDistr, true);
+									std::vector<std::tuple<uint64_t, float>> foodeffects = UtilityAlch::ParseAlchemyEffects(rule->foodProperties, error);
+									rule->foodDistr = UtilityAlch::GetDistribution(foodeffects, RandomRange);
+									rule->foodDistrChance = UtilityAlch::GetDistribution(foodeffects, RandomRange, true);
 									LOGE2_2("[Settings] [LoadDistrRules] rule {} contains {} food effects", rule->ruleName, rule->foodDistr.size());
-									rule->validFood = Utility::SumAlchemyEffects(rule->foodDistr, true);
+									rule->validFood = UtilityAlch::SumAlchemyEffects(rule->foodDistr, true);
 
 									std::pair<int, Distribution::Rule*> tmptuple = { rule->rulePriority, rule };
 
@@ -451,7 +472,7 @@ void Settings::LoadDistrConfigNUP()
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp);
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
 									for (int i = 0; i < items.size(); i++) {
 										if (std::get<0>(items[i]) == Distribution::AssocType::kActor ||
 											std::get<0>(items[i]) == Distribution::AssocType::kNPC ||
@@ -459,7 +480,7 @@ void Settings::LoadDistrConfigNUP()
 											std::get<0>(items[i]) == Distribution::AssocType::kKeyword ||
 											std::get<0>(items[i]) == Distribution::AssocType::kRace) {
 											Distribution::_bosses.insert(std::get<1>(items[i]));
-											LOGE1_2("[Settings] [LoadDistrRules] declared {} as boss.", Utility::GetHex(std::get<1>(items[i])));
+											LOGE1_2("[Settings] [LoadDistrRules] declared {} as boss.", UtilityAlch::GetHex(std::get<1>(items[i])));
 										}
 									}
 									// since we are done delete splits
@@ -475,7 +496,7 @@ void Settings::LoadDistrConfigNUP()
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp);
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
 									for (int i = 0; i < items.size(); i++) {
 										switch (std::get<0>(items[i])) {
 										case Distribution::AssocType::kActor:
@@ -494,15 +515,15 @@ void Settings::LoadDistrConfigNUP()
 										if (AlchExtSettings::EnableLog) {
 											if (std::get<0>(items[i]) == Distribution::AssocType::kActor ||
 												std::get<0>(items[i]) == Distribution::AssocType::kNPC) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded actor {} from distribution.", Utility::GetHex(std::get<1>(items[i])));
+												LOGE1_2("[Settings] [LoadDistrRules] excluded actor {} from distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
 											} else if (std::get<0>(items[i]) == Distribution::AssocType::kFaction) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded faction {} from distribution.", Utility::GetHex(std::get<1>(items[i])));
+												LOGE1_2("[Settings] [LoadDistrRules] excluded faction {} from distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
 											} else if (std::get<0>(items[i]) == Distribution::AssocType::kKeyword) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded keyword {} from distribution.", Utility::GetHex(std::get<1>(items[i])));
+												LOGE1_2("[Settings] [LoadDistrRules] excluded keyword {} from distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
 											} else if (std::get<0>(items[i]) == Distribution::AssocType::kItem) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded item {} from distribution.", Utility::GetHex(std::get<1>(items[i])));
+												LOGE1_2("[Settings] [LoadDistrRules] excluded item {} from distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
 											} else if (std::get<0>(items[i]) == Distribution::AssocType::kRace) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded race {} from distribution.", Utility::GetHex(std::get<1>(items[i])));
+												LOGE1_2("[Settings] [LoadDistrRules] excluded race {} from distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
 											}
 										}
 									}
@@ -519,7 +540,7 @@ void Settings::LoadDistrConfigNUP()
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp);
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
 									for (int i = 0; i < items.size(); i++) {
 										switch (std::get<0>(items[i])) {
 										case Distribution::AssocType::kFaction:
@@ -531,11 +552,11 @@ void Settings::LoadDistrConfigNUP()
 
 										if (AlchExtSettings::EnableLog) {
 											if (std::get<0>(items[i]) == Distribution::AssocType::kFaction) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded faction {} from base line distribution.", Utility::GetHex(std::get<1>(items[i])));
+												LOGE1_2("[Settings] [LoadDistrRules] excluded faction {} from base line distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
 											} else if (std::get<0>(items[i]) == Distribution::AssocType::kKeyword) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded keyword {} from base line distribution.", Utility::GetHex(std::get<1>(items[i])));
+												LOGE1_2("[Settings] [LoadDistrRules] excluded keyword {} from base line distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
 											} else if (std::get<0>(items[i]) == Distribution::AssocType::kRace) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded race {} from base line distribution.", Utility::GetHex(std::get<1>(items[i])));
+												LOGE1_2("[Settings] [LoadDistrRules] excluded race {} from base line distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
 											}
 										}
 									}
@@ -557,7 +578,7 @@ void Settings::LoadDistrConfigNUP()
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp);
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
 									for (int i = 0; i < items.size(); i++) {
 										switch (std::get<0>(items[i])) {
 										case Distribution::AssocType::kItem:
@@ -566,7 +587,7 @@ void Settings::LoadDistrConfigNUP()
 										}
 										if (AlchExtSettings::EnableLog) {
 											if (std::get<0>(items[i]) == Distribution::AssocType::kItem) {
-												LOGE1_2("[Settings] [LoadDistrRules] whitelisted item {}.", Utility::GetHex(std::get<1>(items[i])));
+												LOGE1_2("[Settings] [LoadDistrRules] whitelisted item {}.", UtilityAlch::GetHex(std::get<1>(items[i])));
 											} else if (std::get<0>(items[i]) == Distribution::AssocType::kRace) {
 											}
 										}
@@ -587,13 +608,13 @@ void Settings::LoadDistrConfigNUP()
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> assocobj = Utility::ParseAssocObjects(assoc, error, file, tmp);
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> assocobj = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
 									
 									// parse items associated
 									assoc = splits->at(splitindex);
 									splitindex++;
 									error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID, Chance, CustomItemFlag, Number, bool, uint64_t, uint64_t, bool>> associtm = Utility::ParseCustomObjects(assoc, error, file, tmp);
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID, Chance, CustomItemFlag, Number, bool, uint64_t, uint64_t, bool>> associtm = UtilityAlch::ParseCustomObjects(assoc, error, file, tmp);
 									RE::TESForm* tmpf = nullptr;
 									RE::TESBoundObject* tmpb = nullptr;
 									RE::AlchemyItem* alch = nullptr;
@@ -642,14 +663,14 @@ void Settings::LoadDistrConfigNUP()
 																}
 															} else {
 																// item is not an alchemy item so do not add it
-																LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an AlchemyItem.", Utility::GetHex(std::get<1>(associtm[i])));
+																LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an AlchemyItem.", UtilityAlch::GetHex(std::get<1>(associtm[i])));
 																//citems->items.push_back({ tmpb, std::get<2>(associtm[i]) });
 															}
 														}
 														break;
 													}
 												} else {
-													LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an TESBoundObject.", Utility::GetHex(std::get<1>(associtm[i])));
+													LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an TESBoundObject.", UtilityAlch::GetHex(std::get<1>(associtm[i])));
 												}
 											}
 											break;
@@ -675,7 +696,7 @@ void Settings::LoadDistrConfigNUP()
 											citems->assocobjects.insert(std::get<1>(assocobj[i]));
 											auto iter = Distribution::_customItems.find(std::get<1>(assocobj[i]));
 											if (iter != Distribution::_customItems.end()) {
-												auto vec = iter->second;
+												std::vector<Distribution::CustomItemStorage*> vec = iter->second;
 												vec.push_back(citems);
 												Distribution::_customItems.insert_or_assign(std::get<1>(assocobj[i]), vec);
 												cx++;
@@ -699,7 +720,7 @@ void Settings::LoadDistrConfigNUP()
 									if (cx == 0) {
 										auto iter = Distribution::_customItems.find(0x0);
 										if (iter != Distribution::_customItems.end()) {
-											auto vec = iter->second;
+											std::vector<Distribution::CustomItemStorage*> vec = iter->second;
 											vec.push_back(citems);
 											Distribution::_customItems.insert_or_assign(0x0, vec);
 											cx++;
@@ -827,7 +848,7 @@ void Settings::LoadDistrConfigNUP()
 
 					// parse the associated objects
 					bool error = false;
-					std::vector<std::tuple<Distribution::AssocType, RE::FormID>> objects = Utility::ParseAssocObjects((std::get<0>(a)->at(3)), error, std::get<1>(a), std::get<2>(a));
+					std::vector<std::tuple<Distribution::AssocType, RE::FormID>> objects = UtilityAlch::ParseAssocObjects((std::get<0>(a)->at(3)), error, std::get<1>(a), std::get<2>(a));
 
 					std::pair<int, Distribution::Rule*> tmptuple = { prio, rule };
 					// assign rules to search parameters
@@ -867,40 +888,40 @@ void Settings::LoadDistrConfigNUP()
 							switch (std::get<0>(objects[i])) {
 							case Distribution::AssocType::kFaction:
 								if (attach) {
-									LOGE3_2("[Settings] [LoadDistrRules] attached Faction {} to rule {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
+									LOGE3_2("[Settings] [LoadDistrRules] attached Faction {} to rule {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
 								} else 
-									LOGE5_2("[Settings] [LoadDistrRules] updated Faction {} to rule {} with new Priority {} overruling {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
+									LOGE5_2("[Settings] [LoadDistrRules] updated Faction {} to rule {} with new Priority {} overruling {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
 								break;
 							case Distribution::AssocType::kKeyword:
 								if (attach) {
-									LOGE3_2("[Settings] [LoadDistrRules] attached Keyword {} to rule {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
+									LOGE3_2("[Settings] [LoadDistrRules] attached Keyword {} to rule {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
 								} else
-									LOGE5_2("[Settings] [LoadDistrRules] updated Keyword {} to rule {} with new Priority {} overruling {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
+									LOGE5_2("[Settings] [LoadDistrRules] updated Keyword {} to rule {} with new Priority {} overruling {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
 								break;
 							case Distribution::AssocType::kRace:
 								if (attach) {
-									LOGE3_2("[Settings] [LoadDistrRules] attached Race {} to rule {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
+									LOGE3_2("[Settings] [LoadDistrRules] attached Race {} to rule {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
 								} else
-									LOGE5_2("[Settings] [LoadDistrRules] updated Race {} to rule {} with new Priority {} overruling {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
+									LOGE5_2("[Settings] [LoadDistrRules] updated Race {} to rule {} with new Priority {} overruling {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
 								break;
 							case Distribution::AssocType::kClass:
 								if (attach) {
-									LOGE3_2("[Settings] [LoadDistrRules] attached Class {} to rule {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
+									LOGE3_2("[Settings] [LoadDistrRules] attached Class {} to rule {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
 								} else
-									LOGE5_2("[Settings] [LoadDistrRules] updated Class {} to rule {} with new Priority {} overruling {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
+									LOGE5_2("[Settings] [LoadDistrRules] updated Class {} to rule {} with new Priority {} overruling {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
 								break;
 							case Distribution::AssocType::kCombatStyle:
 								if (attach) {
-									LOGE3_2("[Settings] [LoadDistrRules] attached CombatStyle {} to rule {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
+									LOGE3_2("[Settings] [LoadDistrRules] attached CombatStyle {} to rule {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
 								} else
-									LOGE5_2("[Settings] [LoadDistrRules] updated CombatStyle {} to rule {} with new Priority {} overruling {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
+									LOGE5_2("[Settings] [LoadDistrRules] updated CombatStyle {} to rule {} with new Priority {} overruling {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
 								break;
 							case Distribution::AssocType::kNPC:
 							case Distribution::AssocType::kActor:
 								if (attach) {
-									LOGE3_2("[Settings] [LoadDistrRules] attached Actor {} to rule {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
+									LOGE3_2("[Settings] [LoadDistrRules] attached Actor {} to rule {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, std::get<1>(a));
 								} else
-									LOGE5_2("[Settings] [LoadDistrRules] updated Actor {} to rule {} with new Priority {} overruling {}.\t\t\t{}", Utility::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
+									LOGE5_2("[Settings] [LoadDistrRules] updated Actor {} to rule {} with new Priority {} overruling {}.\t\t\t{}", UtilityAlch::GetHex(std::get<1>(objects[i])), rule->ruleName, prio, oldprio, std::get<1>(a));
 								break;
 							}
 						}
@@ -922,240 +943,240 @@ void Settings::LoadDistrConfigNUP()
 	RE::TESForm* tmp = nullptr;
 	
 	// MQ201Drink (don't give quest items out)
-	if ((tmp = Utility::GetTESForm(datahandler, 0x00036D53, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x00036D53, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// Unknown Potion with unknown effect (in-game type)
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0005661F, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0005661F, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// Kordirs skooma: its probably kordirs
-	if ((tmp = Utility::GetTESForm(datahandler, 0x00057A7B, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x00057A7B, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// Stallion's potion: its probably stallions
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0005566A, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0005566A, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// DB03Poison (quest item)
-	if ((tmp = Utility::GetTESForm(datahandler, 0x00058CFB, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x00058CFB, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// DA16TorporPotion (quest item)
-	if ((tmp = Utility::GetTESForm(datahandler, 0x00005F6DF, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x00005F6DF, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// IVDGhostPotion (special item)
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000663E1, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000663E1, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// DummyPotion
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0006A07E, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0006A07E, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// TG00FalmerBlood - Falmer Blood Elixier
 	// DA14Water - Holy Water
 	// TGTQ02BalmoraBlue (quest item)
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000DC172, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000DC172, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// CW01BWraithPoison (quest item)
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000E2D3D, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000E2D3D, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// Blades Potion: probably esberns
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000E6DF5, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000E6DF5, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// MS14WineAltoA: probably jessica's 
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000F257E, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000F257E, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// White Phial
-	if ((tmp = Utility::GetTESForm(datahandler, 0x00102019, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x00102019, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// White Phial
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010201A, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010201A, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// White Phial
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010201B, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010201B, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// White Phial
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010201C, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010201C, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// White Phial
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010201D, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010201D, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// White Phial
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010201E, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010201E, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// DA03FoodMammothMeat (quest item)
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010211A, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010211A, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// Mq101JuniperMead (quest item)
-	if ((tmp = Utility::GetTESForm(datahandler, 0x00107A8A, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x00107A8A, "", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 
 	// DLC1FoodSoulHusk
-	if ((tmp = Utility::GetTESForm(datahandler, 0x014DC4, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x014DC4, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 	// DLC1FoodSoulHuskExtract
-	if ((tmp = Utility::GetTESForm(datahandler, 0x015A1E, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x015A1E, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedItems.insert(tmp->GetFormID());
 
 
 	/// EXCLUDE SUMMONS
 
 	// DA14Summoned
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0001F3AA, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0001F3AA, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachFlame
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000204C0, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000204C0, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachFrost
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000204C1, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000204C1, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachStorm
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000204C2, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000204C2, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachFlamePotent
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0004E940, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0004E940, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachFrostPotent
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0004E943, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0004E943, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachStormPotent
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0004E944, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0004E944, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// EncSummonFamiliar
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000640B5, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000640B5, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// MGArnielSummon
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0006A152, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0006A152, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonPhantom
-	if ((tmp = Utility::GetTESForm(datahandler, 0x00072310, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x00072310, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// dunSummonedSkeleton01Missile
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0007503C, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0007503C, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachFlameThrall
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0007E87D, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0007E87D, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachFrostThrall
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0007E87E, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0007E87E, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachStormThrall
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0007E87F, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0007E87F, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonFireStorm
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000877EB, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000877EB, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonFelldir
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000923F9, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000923F9, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonGormlaith
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000923FA, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000923FA, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonHakon
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000923FB, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000923FB, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// MGRDremoraSummon
-	if ((tmp = Utility::GetTESForm(datahandler, 0x00099F2F, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x00099F2F, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonFlamingThrall
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0009CE28, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0009CE28, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// dunSummonedCreature
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000CC5A2, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000CC5A2, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachFlameThrallPotent
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000CDECC, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000CDECC, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachFrostThrallPotent
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000CDECD, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000CDECD, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachStormThrallPotent
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000CDECE, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000CDECE, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// HowlSummonWolf
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000CF79E, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000CF79E, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// dunFortSnowhawkSummonedSkeleton01
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000D8D95, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000D8D95, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// dunSummonedSkeleton01Melee1HShield
-	if ((tmp = Utility::GetTESForm(datahandler, 0x000F90BC, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x000F90BC, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonEncDremoraLord
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010DDEE, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010DDEE, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DA14DremoraSummon
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010E38B, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010E38B, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachFrostNPC
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010EE43, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010EE43, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachStormNPC
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010EE45, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010EE45, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachFrostNPCPotent
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010EE46, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010EE46, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// SummonAtronachStormNPCPotent
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0010EE47, "", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0010EE47, "", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC1SoulCairnWrathmanSummon
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0045B4, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0045B4, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC1SoulCairnMistmanSummon
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0045B7, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0045B7, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC1SoulCairnBonemanSummon
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0045B9, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0045B9, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC1HowlSummonIceWolf
-	if ((tmp = Utility::GetTESForm(datahandler, 0x008A6C, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x008A6C, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC1HowlSummonWerewolf
-	if ((tmp = Utility::GetTESForm(datahandler, 0x008A6D, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x008A6D, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC01SoulCairnHorseSummon
-	if ((tmp = Utility::GetTESForm(datahandler, 0x00BDD0, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x00BDD0, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC1VQ05BonemanSummon
-	if ((tmp = Utility::GetTESForm(datahandler, 0x00BFF0, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x00BFF0, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC1EncUndeadSummon1
-	if ((tmp = Utility::GetTESForm(datahandler, 0x01A16A, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x01A16A, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC1EncUndeadSummon2
-	if ((tmp = Utility::GetTESForm(datahandler, 0x01A16B, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x01A16B, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC1EncUndeadSummon3
-	if ((tmp = Utility::GetTESForm(datahandler, 0x01A16C, "Dawnguard.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x01A16C, "Dawnguard.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC2SummonAshGuardian
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0177B6, "Dragonborn.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0177B6, "Dragonborn.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC2SummonAshSpawn01
-	if ((tmp = Utility::GetTESForm(datahandler, 0x01CDF8, "Dragonborn.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x01CDF8, "Dragonborn.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC2SummonAshGuardianNeloth
-	if ((tmp = Utility::GetTESForm(datahandler, 0x01DBDC, "Dragonborn.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x01DBDC, "Dragonborn.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC2SummonTrollFrost
-	if ((tmp = Utility::GetTESForm(datahandler, 0x01DFA1, "Dragonborn.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x01DFA1, "Dragonborn.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC2SummonSeeker
-	if ((tmp = Utility::GetTESForm(datahandler, 0x01EEC9, "Dragonborn.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x01EEC9, "Dragonborn.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC2dunKarstaagSummon
-	if ((tmp = Utility::GetTESForm(datahandler, 0x024811, "Dragonborn.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x024811, "Dragonborn.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC2SummonSeekerHigh
-	if ((tmp = Utility::GetTESForm(datahandler, 0x030CDE, "Dragonborn.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x030CDE, "Dragonborn.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC2SummonWerebear
-	if ((tmp = Utility::GetTESForm(datahandler, 0x0322B3, "Dragonborn.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x0322B3, "Dragonborn.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 	// DLC2dunKarstaagIceWraithSummoned
-	if ((tmp = Utility::GetTESForm(datahandler, 0x034B5A, "Dragonborn.esm", "")) != nullptr)
+	if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x034B5A, "Dragonborn.esm", "")) != nullptr)
 		Distribution::_excludedNPCs.insert(tmp->GetFormID());
 		
 	// EXCLUDED FACTIONS
 
 
 	// template:
-	//if ((tmp = Utility::GetTESForm(datahandler, 0, "", "")) != nullptr)
+	//if ((tmp = UtilityAlch::GetTESForm(datahandler, 0, "", "")) != nullptr)
 	//	Distribution::_excludedItems.insert(tmp->GetFormID());
 
 	Distribution::initialised = true;
@@ -1177,11 +1198,11 @@ void Settings::LoadDistrConfigNUP()
 		logger::info("[Settings] [LoadDistrRules] Number of Baseline Exclusions: {}", Distribution::baselineExclusions()->size());
 		logger::info("[Settings] [LoadDistrRules] Buckets of Baseline Exclusions: {}", Distribution::baselineExclusions()->bucket_count());
 		/*for (int i = 0; i < Distribution::_rules.size(); i++) {
-			logger::info("rule {} pointer {}", i, Utility::GetHex((uintptr_t)Distribution::_rules[i]));
+			logger::info("rule {} pointer {}", i, UtilityAlch::GetHex((uintptr_t)Distribution::_rules[i]));
 		}
 		auto iter = Distribution::_assocMap.begin();
 		while (iter != Distribution::_assocMap.end()) {
-			logger::info("assoc\t{}\trule\t{}", Utility::GetHex(iter->first), Utility::GetHex((uintptr_t)(std::get<1>(iter->second))));
+			logger::info("assoc\t{}\trule\t{}", UtilityAlch::GetHex(iter->first), UtilityAlch::GetHex((uintptr_t)(std::get<1>(iter->second))));
 			iter++;
 		}*/
 	}
@@ -1321,13 +1342,13 @@ void Settings::LoadDistrConfigAlchExt()
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> assocobj = Utility::ParseAssocObjects(assoc, error, file, tmp);
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> assocobj = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
 
 									// parse items associated
 									assoc = splits->at(splitindex);
 									splitindex++;
 									error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID, Chance, CustomItemFlag, Number, bool, uint64_t, uint64_t, bool>> associtm = Utility::ParseCustomObjects(assoc, error, file, tmp);
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID, Chance, CustomItemFlag, Number, bool, uint64_t, uint64_t, bool>> associtm = UtilityAlch::ParseCustomObjects(assoc, error, file, tmp);
 									RE::TESForm* tmpf = nullptr;
 									RE::TESBoundObject* tmpb = nullptr;
 									RE::AlchemyItem* alch = nullptr;
@@ -1376,14 +1397,14 @@ void Settings::LoadDistrConfigAlchExt()
 																}
 															} else {
 																// item is not an alchemy item so do not add it
-																LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an AlchemyItem.", Utility::GetHex(std::get<1>(associtm[i])));
+																LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an AlchemyItem.", UtilityAlch::GetHex(std::get<1>(associtm[i])));
 																//citems->items.push_back({ tmpb, std::get<2>(associtm[i]) });
 															}
 														}
 														break;
 													}
 												} else {
-													LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an TESBoundObject.", Utility::GetHex(std::get<1>(associtm[i])));
+													LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an TESBoundObject.", UtilityAlch::GetHex(std::get<1>(associtm[i])));
 												}
 											}
 											break;
@@ -1409,7 +1430,7 @@ void Settings::LoadDistrConfigAlchExt()
 											citems->assocobjects.insert(std::get<1>(assocobj[i]));
 											auto iter = Distribution::_customItems.find(std::get<1>(assocobj[i]));
 											if (iter != Distribution::_customItems.end()) {
-												auto vec = iter->second;
+												std::vector<Distribution::CustomItemStorage*> vec = iter->second;
 												vec.push_back(citems);
 												Distribution::_customItems.insert_or_assign(std::get<1>(assocobj[i]), vec);
 												cx++;
@@ -1433,7 +1454,7 @@ void Settings::LoadDistrConfigAlchExt()
 									if (cx == 0) {
 										auto iter = Distribution::_customItems.find(0x0);
 										if (iter != Distribution::_customItems.end()) {
-											auto vec = iter->second;
+											std::vector<Distribution::CustomItemStorage*> vec = iter->second;
 											vec.push_back(citems);
 											Distribution::_customItems.insert_or_assign(0x0, vec);
 											cx++;
@@ -1448,7 +1469,180 @@ void Settings::LoadDistrConfigAlchExt()
 									delete splits;
 								}
 								break;
-							case 101:  // disease rules
+							case 101: // disease: define infected
+								{
+									if (splits->size() != 4) {
+										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									Diseases::Disease disease = Diseases::kAshChancre;
+									try {
+										disease = static_cast<Diseases::Disease>(std::stoi(splits->at(splitindex)));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"Disease\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									} catch (std::invalid_argument&) {
+										logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"Disease\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									}
+
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									for (int i = 0; i < items.size(); i++) {
+										switch (std::get<0>(items[i])) {
+										case Distribution::AssocType::kActor:
+										case Distribution::AssocType::kNPC:
+										case Distribution::AssocType::kClass:
+										case Distribution::AssocType::kCombatStyle:
+										case Distribution::AssocType::kFaction:
+										case Distribution::AssocType::kKeyword:
+										case Distribution::AssocType::kRace:
+											{
+												auto data = Data::GetSingleton();
+												auto itr = data->diseasesAssoc.find(std::get<1>(items[i]));
+												if (itr != data->diseasesAssoc.end()) {
+													if (itr->second)  // vector valid
+													{
+														itr->second->push_back(disease);
+													} else  // vector not valid
+													{
+														std::vector<Diseases::Disease>* vec = new std::vector<Diseases::Disease>;
+														vec->push_back(disease);
+														data->diseasesAssoc.insert_or_assign(std::get<1>(items[i]), vec);
+													}
+												}
+											}
+											break;
+										}
+									}
+									delete splits;
+								}
+								break;
+							case 102: // disease: define cell properties
+								{
+									if (splits->size() != 4) {
+										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									CellTypes::CellType celltype = CellTypes::kNone;
+									try {
+										celltype = static_cast<CellTypes::CellType>(std::stoi(splits->at(splitindex)));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"CellType\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									} catch (std::invalid_argument&) {
+										logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"CellType\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									}
+
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									for (int i = 0; i < items.size(); i++) {
+										switch (std::get<0>(items[i])) {
+										case Distribution::AssocType::kCell:
+											{
+												auto data = Data::GetSingleton();
+												auto itr = data->cellMap.find(std::get<1>(items[i]));
+												if (itr != data->cellMap.end() && itr->second) {
+													itr->second->type |= celltype;
+												}
+											}
+											break;
+										}
+									}
+									delete splits;
+								}
+								break;
+							case 103:  // disease: define weather properties
+								{
+									if (splits->size() != 4) {
+										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									WeatherTypes::WeatherType weathertype = WeatherTypes::kNone;
+									try {
+										weathertype = static_cast<WeatherTypes::WeatherType>(std::stoi(splits->at(splitindex)));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"WeatherType\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									} catch (std::invalid_argument&) {
+										logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"WeatherType\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									}
+
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									for (int i = 0; i < items.size(); i++) {
+										switch (std::get<0>(items[i])) {
+										case Distribution::AssocType::kWeather:
+											{
+												auto data = Data::GetSingleton();
+												auto itr = data->weatherMap.find(std::get<1>(items[i]));
+												if (itr != data->weatherMap.end() && itr->second) {
+													itr->second->type |= weathertype;
+												}
+											}
+											break;
+										}
+									}
+									delete splits;
+								}
+								break;
+							case 104:  // disease: define texture properties
+								{
+									if (splits->size() != 4) {
+										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									TextureTypes::TextureType texturetype = TextureTypes::kNone;
+									try {
+										texturetype = static_cast<TextureTypes::TextureType>(std::stoi(splits->at(splitindex)));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"TextureType\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									} catch (std::invalid_argument&) {
+										logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"TextureType\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									}
+
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									for (int i = 0; i < items.size(); i++) {
+										switch (std::get<0>(items[i])) {
+										case Distribution::AssocType::kTextureSet:
+											{
+												auto data = Data::GetSingleton();
+												auto itr = data->textureMap.find(std::get<1>(items[i]));
+												if (itr != data->textureMap.end() && itr->second) {
+													itr->second->type |= texturetype;
+												}
+											}
+											break;
+										}
+									}
+									delete splits;
+								}
+								break;
 							default:
 								logger::warn("[Settings] [LoadDistrRulesAlchExt] Rule type does not exist. file: {}, rule:\"{}\"", file, tmp);
 								delete splits;
@@ -1470,6 +1664,8 @@ void Settings::LoadDistrConfigAlchExt()
 			logger::warn("[Settings] [LoadDistrRulesAlchExt] file {} couldn't be read successfully due to an error", file);
 		}
 	}
+
+	LoadGameObjects();
 
 
 	if (Settings::AlchExtSettings::EnableLog) {

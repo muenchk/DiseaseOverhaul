@@ -37,7 +37,7 @@ public:
 	/// <summary>
 	/// Name of this plugin
 	/// </summary>
-	static inline std::string PluginName = "NPCsUsePotions.esp";
+	static inline std::string PluginName = "AlchemyExpansion.esp";
 
 	/// <summary>
 	/// Contains values used for compatibility
@@ -155,6 +155,11 @@ public:
 	class AlchExtSettings
 	{
 	public:
+		// general
+		static inline int CycleTime = 10000;
+
+		static inline float TickLength = 0.005f;
+
 		// debug
 		static inline bool EnableLog = false;
 		static inline int LogLevel = 0;      // 0 - only highest level
@@ -169,6 +174,13 @@ public:
 		// compatibility
 		static inline bool _CompatibilityCACO = false;        // automatic
 		static inline bool _CompatibilityApothecary = false;  // automatic
+
+		// game settings
+		static inline bool _ignoreVampireBaseImmunity = false; // ignores the vampires base immunity to diseases
+		static inline bool _ignoreWerewolfBaseImmunity = false; // ignores the werewolfs base immunity to diseases
+		static inline bool _ignoreDiseaseResistance = false; // ignores all disease resistance and immunities
+		static inline float _particleRange = 150.0f;
+		static inline bool _ignoreTimeAdvancementConstraint = false; // ignores the time constraint on advancing stages
 	};
 
 	class Interfaces
@@ -218,9 +230,14 @@ public:
 		static inline RE::BGSKeyword* VendorItemFoodRaw;
 		static inline RE::BGSKeyword* VendorItemPoison;
 		static inline RE::BGSKeyword* ActorTypeDwarven;
+		static inline RE::BGSKeyword* Vampire;
 
 		static inline RE::TESFaction* CurrentFollowerFaction;
 		static inline RE::TESFaction* CurrentHirelingFaction;
+		static inline RE::TESFaction* WerewolfFaction;
+		static inline RE::TESFaction* CreatureFaction;
+
+		static inline RE::SpellItem* WerewolfImmunity;
 	};
 
 	/// <summary>

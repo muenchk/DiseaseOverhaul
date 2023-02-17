@@ -1,15 +1,30 @@
 #include "Disease.h"
 #include "Logging.h"
 
-
-Disease::Spreadingbase Disease::CalcPossibleInfectionConditions(uint32_t cellid)
+bool Disease::ParticleSpread()
 {
-	LOG_3("{}[Disease] [CalcPossibleInfectionConditions]");
-	RE::TESForm* form = RE::TESForm::LookupByID(cellid);
-	if (form) {
-		RE::TESObjectCELL* cell = form->As<RE::TESObjectCELL>();
-		if (cell) {
-			// we have the cell now check for the conditions
-		}
+	return flags & DiseaseFlags::kParticleSpread;
+}
+
+bool Disease::AirSpread()
+{
+	return flags & DiseaseFlags::kAirSpread;
+}
+
+void Disease::CalcFlags()
+{
+	// check particle spread
+	if (std::get<0>(_spreading[Spreading::kParticle]) != 0)
+		flags = flags | DiseaseFlags::kParticleSpread;
+	for (int i = 0; i < _numstages; i++) {
+		if (std::get<0>(_stages[i]->_spreading[Spreading::kParticle]) != 0)
+			flags = flags | DiseaseFlags::kParticleSpread;
+	}
+	// check air spread
+	if (std::get<0>(_spreading[Spreading::kAir]) != 0)
+		flags = flags | DiseaseFlags::kAirSpread;
+	for (int i = 0; i < _numstages; i++) {
+		if (std::get<0>(_stages[i]->_spreading[Spreading::kAir]) != 0)
+			flags = flags | DiseaseFlags::kAirSpread;
 	}
 }

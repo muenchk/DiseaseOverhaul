@@ -1,5 +1,6 @@
 #pragma once
 #include "Disease.h"
+#include "DiseaseStats.h"
 
 /// <summary>
 /// Determines the strength of an Item
@@ -39,15 +40,30 @@ enum CustomItemFlag
 /// <summary>
 /// Specifies conditions for distribution and usage for custom items
 /// </summary>
-enum class CustomItemConditions : unsigned __int64
+enum class CustomItemConditionsAll : unsigned __int64
 {
-	None = 0,
-	IsBoss = 1, // distribution condition
+	kNone = 0,
+	kIsBoss = 1 << 0,            // 1	// distribution & usage condition
+	kHealthThreshold = 1 << 1,   // 2	// usage
+	kMagickaThreshold = 1 << 2,  // 4	// usage
+	kStaminaThreshold = 1 << 3,  // 8	// usage
+	kActorTypeDwarven = 1 << 4,  // 10	// usage
+
+	kAllUsage = kIsBoss | kHealthThreshold | kMagickaThreshold | kStaminaThreshold | kActorTypeDwarven,
+	kAllDistr = kIsBoss,
 };
 
-enum class CustomItemConditions2 : unsigned __int64
+enum class CustomItemConditionsAny : unsigned __int64
 {
+	kNone = 0,
+	kIsBoss = 1 << 0,            // 1	// distribution & usage  condition
+	kHealthThreshold = 1 << 1,   // 2	// usage
+	kMagickaThreshold = 1 << 2,  // 4	// usage
+	kStaminaThreshold = 1 << 3,  // 8	// usage
+	kActorTypeDwarven = 1 << 4,  // 10	// usage
 
+	kAllUsage = kIsBoss | kHealthThreshold | kMagickaThreshold | kStaminaThreshold | kActorTypeDwarven,
+	kAllDistr = kIsBoss,
 };
 
 /// <summary>
@@ -99,14 +115,7 @@ public:
 		void Reset();
 	};
 
-	class DiseaseStatus
-	{
-		float LastGameTime;
-		float advancementticks;
-		std::vector<DiseaseInfo> diseases;
-
-	};
-	DiseaseStatus* dinfo;
+	DiseaseStats* dinfo;
 	/// <summary>
 	/// custom items that may be distributed to an actor
 	/// </summary>
@@ -135,31 +144,58 @@ public:
 	/// Current remaining cooldown on regeneration potions
 	/// </summary>
 	int durRegeneration = 0;
-
+	/// <summary>
+	/// time when the actor may use the next food item -> compare with RE::Calendar::GetSingleton()->GetDaysPassed();
+	/// </summary>
+	float nextFoodTime = 0.0f;
 	/// <summary>
 	/// Time the npc was last given items
 	/// </summary>
 	float lastDistrTime = 0.0f;
 
-	ActorStrength actorStrength;
-	ItemStrength itemStrength;
+	/// <summary>
+	/// whether custom items have already been given to the npc
+	/// </summary>
+	bool _distributedCustomItems = false;
 
-	bool _boss;
+	ActorStrength actorStrength = ActorStrength::Weak;
+	ItemStrength itemStrength = ItemStrength::kWeak;
+
+	bool _boss = false;
+	bool _automaton = false;
+	bool _vampire = false;
+	bool _werewolf = false;
+
+	const uint32_t version = 0x10000001;
 
 	ActorInfo(RE::Actor* _actor, int _durHealth, int _durMagicka, int _durStamina, int _durFortify, int _durRegeneration);
-	
+	ActorInfo();
 
+	std::string ToString();
+	
+	
 	~ActorInfo()
 	{
-		delete citems;
-		delete dinfo;
+		try {
+			delete citems;
+		} catch (std::exception&) {}
+		try {
+			delete dinfo;
+		} catch (std::exception&) {}
 	}
 
 public:
+	/// <summary>
+	/// returns the amount of disease an actor ignores: [1] = 100%, [0] = 0%
+	/// </summary>
+	/// <returns></returns>
+	float IgnoresDisease();
+	void CalcActorProperties();
 	void CalcCustomItems();
 	bool IsBoss() { return _boss; }
 
 	std::vector<std::tuple<RE::AlchemyItem*, int, int8_t, uint64_t, uint64_t>> FilterCustomConditionsDistr(std::vector<std::tuple<RE::AlchemyItem*, int, int8_t, uint64_t, uint64_t>> itms);
+	std::vector<std::tuple<RE::AlchemyItem*, int, int8_t, uint64_t, uint64_t>> FilterCustomConditionsUsage(std::vector<std::tuple<RE::AlchemyItem*, int, int8_t, uint64_t, uint64_t>> itms);
 	std::vector<std::tuple<RE::TESBoundObject*, int, int8_t, uint64_t, uint64_t, bool>> FilterCustomConditionsDistrItems(std::vector<std::tuple<RE::TESBoundObject*, int, int8_t, uint64_t, uint64_t, bool>> itms);
 	bool CanUseItem(RE::FormID item);
 	bool CanUsePot(RE::FormID item);
@@ -169,4 +205,14 @@ public:
 	bool CanUseFood(RE::FormID item);
 	bool IsCustomAlchItem(RE::AlchemyItem* item);
 	bool IsCustomItem(RE::TESBoundObject* item);
+
+	bool CalcUsageConditions(uint64_t conditionsall, uint64_t conditionsany);
+	bool CalcDistrConditions(uint64_t conditionsall, uint64_t conditionsany);
+
+	uint32_t GetVersion();
+
+	int32_t GetDataSize();
+	int32_t GetMinDataSize(int32_t version);
+	void WriteData(unsigned char* buffer, int offset);
+	bool ReadData(unsigned char* buffer, int offset, int length);
 };

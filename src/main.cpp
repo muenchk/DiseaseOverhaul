@@ -2,6 +2,8 @@
 #include "Settings.h"
 #include "Game.h"
 #include "Interface/NUPInterface.h"
+#include "DataStorage.h"
+#include "Data.h"
 
 namespace
 {
@@ -34,8 +36,8 @@ namespace
 	}
 }
 
-#ifdef SKYRIM_SUPPORT_AE
-// AE
+#	if defined(SKYRIM_SUPPORT_AE353)
+// AE before 1.6.353
 extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() {
 	SKSE::PluginVersionData v;
 
@@ -43,6 +45,21 @@ extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() {
 	v.PluginName(Plugin::NAME);
 
 	v.UsesAddressLibrary(true);
+	v.CompatibleVersions({ SKSE::RUNTIME_LATEST });
+
+	return v;
+}();
+
+#	elif defined(SKYRIM_SUPPORT_AE)
+// after 1.6.353
+extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() {
+	SKSE::PluginVersionData v;
+
+	v.PluginVersion(Plugin::VERSION);
+	v.PluginName(Plugin::NAME);
+	
+	v.UsesAddressLibrary();
+	v.UsesUpdatedStructs();
 	v.CompatibleVersions({ SKSE::RUNTIME_LATEST });
 
 	return v;
@@ -85,7 +102,10 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 		// register eventhandlers
 		Events::RegisterAllEventHandlers();
 		logger::info("Registered Events");
-		// register console commands
+		// register data storage
+		Storage::Register();
+		// init diseases
+		Data::GetSingleton()->InitDiseases();
 		break;
 	case SKSE::MessagingInterface::kPostLoad:
 		Settings::Interfaces::RequestAPIs();

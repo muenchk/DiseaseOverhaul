@@ -14,7 +14,8 @@ namespace Events
 		public RE::BSTEventSink<RE::TESLoadGameEvent>,
 		public RE::BSTEventSink<RE::TESEquipEvent>,
 		public RE::BSTEventSink<RE::TESHarvestedEvent::ItemHarvested>,
-		public RE::BSTEventSink<RE::TESCellAttachDetachEvent>
+		public RE::BSTEventSink<RE::TESCellAttachDetachEvent>,
+		public RE::BSTEventSink<RE::InputEvent*>
 	{
 	public:
 		/// <summary>
@@ -72,6 +73,8 @@ namespace Events
 		/// <returns></returns>
 		virtual EventResult ProcessEvent(const RE::TESCellAttachDetachEvent* a_event, RE::BSTEventSource<RE::TESCellAttachDetachEvent>* a_eventSource) override;
 
+		virtual EventResult ProcessEvent(RE::InputEvent* const* a_event, RE::BSTEventSource<RE::InputEvent*>* a_eventSource) override;
+
 	private:
 		EventHandler() = default;
 		EventHandler(const EventHandler&) = delete;
@@ -92,14 +95,14 @@ namespace Events
 	void DisableThreads();
 
 	/// <summary>
-	/// Resets information about actors
+	/// temporarily disables processing
 	/// </summary>
-	void ResetActorInfoMap();
+	bool LockProcessing();
 
 	/// <summary>
-	/// Retrieves Information about an actor from an internal database
+	/// unlocks temporary lock on processing
 	/// </summary>
-	ActorInfo* FindActor(RE::Actor* actor);
+	void UnlockProcessing();
 
 	/// <summary>
 	/// The type of event

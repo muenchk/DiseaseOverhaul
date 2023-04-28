@@ -1,5 +1,9 @@
 build/
 buildvr/
+buildAE353/
+buildSE/
+buildAE/
+.vs/
 src/.vs/
 src/.vscode
 src/out
@@ -7,7 +11,6 @@ src/TODO.txt
 src/Changelog.txt
 startenv.bat
 startenvlaptop.bat
-.vs/
 
 # Prerequisites
 *.d
@@ -41,3 +44,4 @@ startenvlaptop.bat
 *.exe
 *.out
 *.app
+/tmp.txt

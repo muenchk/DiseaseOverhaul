@@ -6,124 +6,363 @@
 #include "ActorManipulation.h"
 #include "Random.h"
 
-ActorInfo::ActorInfo(RE::Actor* _actor, int _durHealth, int _durMagicka, int _durStamina, int _durFortify, int _durRegeneration)
+void ActorInfo::Init()
+{
+	playerRef = RE::PlayerCharacter::GetSingleton();
+}
+
+ActorInfo::ActorInfo(RE::Actor* _actor)
 {
 	LOG_3("{}[ActorInfo] [ActorInfo]");
-	actor = _actor;
-	durHealth = _durHealth;
-	durMagicka = _durMagicka;
-	durStamina = _durStamina;
-	durFortify = _durFortify;
-	durRegeneration = _durRegeneration;
-	citems = new CustomItems();
-	dinfo = new DiseaseStats();
-	dinfo->ForceIncreaseStage(actor, Diseases::kAshWoeBlight);
-	CalcActorProperties();
-	CalcCustomItems();
+	actor = _actor->GetHandle();
+	if (_actor) {
+		formid.SetID(_actor->GetFormID());
+		// get original id
+		if (const auto extraLvlCreature = _actor->extraList.GetByType<RE::ExtraLeveledCreature>()) {
+			if (const auto originalBase = extraLvlCreature->originalBase) {
+				formid.SetOriginalID(originalBase->GetFormID());
+			}
+			if (const auto templateBase = extraLvlCreature->templateBase) {
+				formid.AddTemplateID(templateBase->GetFormID());
+			}
+		} else {
+			formid.SetOriginalID(_actor->GetActorBase()->GetFormID());
+		}
+		name = std::string(_actor->GetName());
+		pluginname = Utility::Mods::GetPluginName(_actor);
+		pluginID = Utility::Mods::GetPluginIndex(pluginname);
+		// if there is no plugin ID, it means that npc is temporary, so base it off of the base npc
+		if (pluginID == 0x1) {
+			pluginID = Utility::ExtractTemplateInfo(_actor->GetActorBase()).pluginID;
+		}
+		for (auto slot : _actor->GetRace()->equipSlots) {
+			if (slot->GetFormID() == 0x13F43)  // LeftHand
+				_haslefthand = true;
+		}
+		_formstring = Utility::PrintForm(this);
+		// Run since [actor] is valid
+		UpdateMetrics(_actor);
+		CalcActorProperties();
+		dinfo.ForceIncreaseStage(_actor, Diseases::kAshWoeBlight);
+		// set to valid
+		valid = true;
+		timestamp_invalid = 0;
+		dead = false;
+	}
+}
+
+void ActorInfo::Reset(RE::Actor* _actor)
+{
+	LOG_1("{}[ActorInfo] [Reset]");
+	if (blockReset) {
+		LOG_1("{}[ActorInfo] [Reset] Reset has been blocked.");
+		return;
+	}
+	aclock;
+	actor = _actor->GetHandle();
+	citems.Reset();
+	dinfo.Reset();
+	formid = ID();
+	pluginname = "";
+	pluginID = 1;
+	name = "";
+	durCombat = 0;
+	_distributedCustomItems = 0;
+	_boss = false;
+	_automaton = false;
+	whitelisted = false;
+	whitelistedcalculated = false;
+	target = std::weak_ptr<ActorInfo>{};
+	handleactor = false;
+	if (_actor) {
+		formid.SetID(_actor->GetFormID());
+		// get original id
+		if (const auto extraLvlCreature = _actor->extraList.GetByType<RE::ExtraLeveledCreature>()) {
+			if (const auto originalBase = extraLvlCreature->originalBase) {
+				formid.SetOriginalID(originalBase->GetFormID());
+			}
+			if (const auto templateBase = extraLvlCreature->templateBase) {
+				formid.AddTemplateID(templateBase->GetFormID());
+			}
+		} else {
+			formid.SetOriginalID(_actor->GetActorBase()->GetFormID());
+		}
+		name = std::string(_actor->GetName());
+		pluginname = Utility::Mods::GetPluginName(_actor);
+		pluginID = Utility::Mods::GetPluginIndex(pluginname);
+		// if there is no plugin ID, it means that npc is temporary, so base it off of the base npc
+		if (pluginID == 0x1) {
+			pluginID = Utility::ExtractTemplateInfo(_actor->GetActorBase()).pluginID;
+		}
+		for (auto slot : _actor->GetRace()->equipSlots) {
+			if (slot->GetFormID() == 0x13F43)  // LeftHand
+				_haslefthand = true;
+		}
+		_formstring = Utility::PrintForm(this);
+		// Run since [actor] is valid
+		UpdateMetrics(_actor);
+		CalcActorProperties();
+		// set to valid
+		valid = true;
+		timestamp_invalid = 0;
+		dead = false;
+	}
+}
+
+ActorInfo::ActorInfo(bool blockedReset)
+{
+	blockReset = blockedReset;
 }
 
 ActorInfo::ActorInfo()
 {
-	actor = nullptr;
-	citems = new CustomItems();
-}
-
-std::string ActorInfo::ToString()
-{
-	return "actor addr: " + Utility::GetHex(reinterpret_cast<std::uintptr_t>(actor)) + "\tactor id:" + Utility::GetHex((actor ? actor->GetFormID() : 0));
-}
-
-void ActorInfo::CalcCustomItems()
-{
-	LOG_3("{}[ActorInfo] [CalcCustomItems]");
-	Distribution::CalcRule(this);
 }
 
 void ActorInfo::CalcActorProperties()
 {
-	if (actor) {
-		if (actor->HasKeyword(Settings::GameObj::ActorTypeDwarven) || actor->GetRace()->HasKeyword(Settings::GameObj::ActorTypeDwarven))
+	if (RE::Actor* _actor = actor.get().get(); _actor != nullptr) {
+		if (_actor->HasKeyword(Settings::GameObj::ActorTypeDwarven) || _actor->GetRace()->HasKeyword(Settings::GameObj::ActorTypeDwarven))
 			_automaton = true;
-		if (actor->HasKeyword(Settings::GameObj::Vampire) || actor->GetRace()->HasKeyword(Settings::GameObj::Vampire))
+		if (_actor->HasKeyword(Settings::GameObj::Vampire) || _actor->GetRace()->HasKeyword(Settings::GameObj::Vampire))
 			_vampire = true;
-		if (actor->IsInFaction(Settings::GameObj::WerewolfFaction))
+		if (_actor->IsInFaction(Settings::GameObj::WerewolfFaction))
 			_werewolf = true;
-		if (actor->HasSpell(Settings::GameObj::WerewolfImmunity))
+		if (_actor->HasSpell(Settings::GameObj::WerewolfImmunity))
 			_werewolf = true;
 	}
 }
 
 float ActorInfo::IgnoresDisease()
 {
-	if (_automaton)
-		return 1.0f;
-	if (Settings::AlchExtSettings::_ignoreDiseaseResistance)
-		return 0.0f;
-	float resistance = actor->GetActorValue(RE::ActorValue::kResistDisease);
-	if (_vampire && Settings::AlchExtSettings::_ignoreVampireBaseImmunity)
-		resistance -= 100;
-	if (_werewolf && Settings::AlchExtSettings::_ignoreWerewolfBaseImmunity)
-		resistance -= 100;
-	if (resistance > 100)
-		resistance = 100;
-	return resistance / 100;
+	if (RE::Actor* _actor = actor.get().get(); _actor != nullptr) {
+		if (_automaton)
+			return 1.0f;
+		if (Settings::Disease::_ignoreDiseaseResistance)
+			return 0.0f;
+		float resistance = _actor->GetActorValue(RE::ActorValue::kResistDisease);
+		if (_vampire && Settings::Disease::_ignoreVampireBaseImmunity)
+			resistance -= 100;
+		if (_werewolf && Settings::Disease::_ignoreWerewolfBaseImmunity)
+			resistance -= 100;
+		if (resistance > 100)
+			resistance = 100;
+		return resistance / 100;
+	}
+	return 0;
 }
 
-#define CV(x) static_cast<uint64_t>(x)
 
-std::vector<std::tuple<RE::AlchemyItem*, int, int8_t, uint64_t, uint64_t>> ActorInfo::FilterCustomConditionsDistr(std::vector<std::tuple<RE::AlchemyItem*, int, int8_t, uint64_t, uint64_t>> itms)
+bool ActorInfo::IsValid()
+{
+	aclock;
+	return valid && actor.get() && actor.get().get();
+}
+
+void ActorInfo::SetValid()
+{
+	aclock;
+	valid = true;
+	timestamp_invalid = 0;
+}
+
+#define CurrentMilliseconds std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()
+
+void ActorInfo::SetInvalid()
+{
+	aclock;
+	valid = false;
+	timestamp_invalid = CurrentMilliseconds;
+}
+
+bool ActorInfo::IsExpired()
+{
+	aclock;
+	// if object was invalidated more than 10 seconds ago, it is most likely not needed anymore
+	if (valid == false && (CurrentMilliseconds - timestamp_invalid) > 10000) {
+		return true;
+	}
+	return false;
+}
+
+void ActorInfo::SetDead()
+{
+	aclock;
+	dead = true;
+}
+
+bool ActorInfo::GetDead()
+{
+	aclock;
+	return dead;
+}
+
+RE::Actor* ActorInfo::GetActor()
+{
+	aclock;
+	if (!valid || dead)
+		return nullptr;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get();
+	return nullptr;
+}
+
+RE::FormID ActorInfo::GetFormID()
+{
+	aclock;
+	if (!valid)
+		return 0;
+	return formid;
+}
+
+RE::FormID ActorInfo::GetFormIDBlank()
+{
+	return formid;
+}
+
+RE::FormID ActorInfo::GetFormIDOriginal()
+{
+	aclock;
+	if (!valid)
+		return 0;
+	return formid.GetOriginalID();
+}
+
+std::vector<RE::FormID> ActorInfo::GetTemplateIDs()
+{
+	aclock;
+	if (!valid)
+		return {};
+	return formid.GetTemplateIDs();
+}
+
+std::string ActorInfo::GetPluginname()
+{
+	aclock;
+	if (!valid)
+		return "";
+	return pluginname;
+}
+
+uint32_t ActorInfo::GetPluginID()
+{
+	aclock;
+	if (!valid)
+		return 0x1;
+	return pluginID;
+}
+
+std::string ActorInfo::GetName()
+{
+	aclock;
+	if (!valid)
+		return "";
+	return name;
+}
+
+std::string ActorInfo::ToString()
+{
+	aclock;
+	if (!valid || !actor.get() || !actor.get().get())
+		return "Invalid Actor Info";
+	return "actor addr: " + Utility::GetHex(reinterpret_cast<std::uintptr_t>(actor.get().get())) + "\tactor:" + Utility::PrintForm(actor.get().get());
+}
+
+void ActorInfo::UpdateMetrics(RE::Actor* reac)
+{
+	playerDistance = reac->GetPosition().GetSquaredDistance(playerPosition);
+	playerHostile = reac->IsHostileToActor(playerRef);
+}
+
+std::vector<CustomItemAlch*> ActorInfo::FilterCustomConditionsDistr(std::vector<CustomItemAlch*> itms)
 {
 	LOG_3("{}[ActorInfo] [FilterCustomConditionsDistr]");
-	std::vector<std::tuple<RE::AlchemyItem*, int, int8_t, uint64_t, uint64_t>> dist;
+	aclock;
+	std::vector<CustomItemAlch*> dist;
+	if (!valid)
+		return dist;
 	for (int i = 0; i < itms.size(); i++) {
-		if (std::get<0>(itms[i]) == nullptr || std::get<0>(itms[i])->GetFormID() == 0)
+		if (itms[i]->object == nullptr || itms[i]->object->GetFormID() == 0)
 			continue;
-		uint64_t cond1 = std::get<3>(itms[i]);
-		uint64_t cond2 = std::get<4>(itms[i]);
-		bool valid = CalcDistrConditions(cond1, cond2);
-		if (valid == true)
+		bool val = CalcDistrConditionsIntern(itms[i]);
+		if (val == true)
 			dist.push_back(itms[i]);
 	}
 	return dist;
 }
 
-std::vector<std::tuple<RE::AlchemyItem*, int, int8_t, uint64_t, uint64_t>> ActorInfo::FilterCustomConditionsUsage(std::vector<std::tuple<RE::AlchemyItem*, int, int8_t, uint64_t, uint64_t>> itms)
+bool ActorInfo::CheckCustomConditionsDistr(std::vector<CustomItemAlch*> itms)
+{
+	LOG_3("{}[ActorInfo] [CheckCustomConditionsDistr]");
+	aclock;
+	if (!valid)
+		return false;
+	bool distributable = false;
+	for (int i = 0; i < itms.size(); i++) {
+		if (itms[i]->object == nullptr || itms[i]->object->GetFormID() == 0)
+			continue;
+		bool val = CalcDistrConditionsIntern(itms[i]);
+		if (val == true)
+			distributable |= val;
+	}
+	return distributable;
+}
+
+std::vector<CustomItemAlch*> ActorInfo::FilterCustomConditionsUsage(std::vector<CustomItemAlch*> itms)
 {
 	LOG_3("{}[ActorInfo] [FilterCustomConditionsDistr]");
-	std::vector<std::tuple<RE::AlchemyItem*, int, int8_t, uint64_t, uint64_t>> dist;
+	aclock;
+	std::vector<CustomItemAlch*> dist;
+	if (!valid)
+		return dist;
 	for (int i = 0; i < itms.size(); i++) {
-		if (std::get<0>(itms[i]) == nullptr || std::get<0>(itms[i])->GetFormID() == 0) {
+		if (itms[i]->object == nullptr || itms[i]->object->GetFormID() == 0) {
 			LOG_3("{}[ActorInfo] [FilterCustomConditionsDistr] error");
 			continue;
 		}
-		uint64_t cond1 = std::get<3>(itms[i]);
-		uint64_t cond2 = std::get<4>(itms[i]);
-		bool valid = CalcUsageConditions(cond1, cond2);
-		if (valid == true)
+		bool val = CalcUsageConditionsIntern(itms[i]);
+		if (val == true)
 			dist.push_back(itms[i]);
 	}
 	return dist;
 }
 
-std::vector<std::tuple<RE::TESBoundObject*, int, int8_t, uint64_t, uint64_t, bool>> ActorInfo::FilterCustomConditionsDistrItems(std::vector<std::tuple<RE::TESBoundObject*, int, int8_t, uint64_t, uint64_t, bool>> itms)
+std::vector<CustomItem*> ActorInfo::FilterCustomConditionsDistrItems(std::vector<CustomItem*> itms)
 {
 	LOG_3("{}[ActorInfo] [FilterCustomConditionsDistrItems]");
-	std::vector<std::tuple<RE::TESBoundObject*, int, int8_t, uint64_t, uint64_t, bool>> dist;
+	aclock;
+	std::vector<CustomItem*> dist;
+	if (!valid)
+		return dist;
 	for (int i = 0; i < itms.size(); i++) {
-		if (std::get<0>(itms[i]) == nullptr || std::get<0>(itms[i])->GetFormID() == 0) {
+		if (itms[i]->object == nullptr || itms[i]->object->GetFormID() == 0) {
 			LOG_3("{}[ActorInfo] [FilterCustomConditionsDistrItems] error");
 			continue;
 		}
-		uint64_t cond1 = std::get<3>(itms[i]);
-		uint64_t cond2 = std::get<4>(itms[i]);
-		bool valid = CalcDistrConditions(cond1, cond2);
-		if (valid == true)
+		bool val = CalcDistrConditionsIntern(itms[i]);
+		if (val == true)
 			dist.push_back(itms[i]);
 	}
 	return dist;
 }
 
-#define CV(x) static_cast<uint64_t>(x)
+bool ActorInfo::CheckCustomConditionsDistrItems(std::vector<CustomItem*> itms)
+{
+	LOG_3("{}[ActorInfo] [CheckCustomConditionsDistrItems]");
+	aclock;
+	if (!valid)
+		return false;
+	bool distributable = false;
+	for (int i = 0; i < itms.size(); i++) {
+		if (itms[i]->object == nullptr || itms[i]->object->GetFormID() == 0) {
+			continue;
+		}
+		bool val = CalcDistrConditionsIntern(itms[i]);
+		if (val == true)
+			distributable |= val;
+	}
+	return distributable;
+}
 
 bool ActorInfo::CanUseItem(RE::FormID item)
 {
@@ -138,192 +377,422 @@ bool ActorInfo::CanUsePot(RE::FormID item)
 bool ActorInfo::CanUsePotion(RE::FormID item)
 {
 	LOG_3("{}[ActorInfo] [CanUsePotion]");
-	auto itr = citems->potionsset.find(item);
-	if (itr == citems->potionsset.end() || itr->second < 0 || itr->second > citems->potions.size())
+	aclock;
+	if (!valid)
 		return false;
-	uint64_t cond1 = std::get<3>(citems->potions[itr->second]);
-	uint64_t cond2 = std::get<4>(citems->potions[itr->second]);
-	return CalcUsageConditions(cond1, cond2);
+	auto itr = citems.potionsset.find(item);
+	if (itr == citems.potionsset.end() || itr->second < 0 || itr->second > citems.potions.size())
+		return false;
+	return CalcUsageConditionsIntern(citems.potions[itr->second]);
 }
 bool ActorInfo::CanUsePoison(RE::FormID item)
 {
 	LOG_3("{}[ActorInfo] [CanUsePoison]");
-	auto itr = citems->poisonsset.find(item);
-	if (itr == citems->poisonsset.end() || itr->second < 0 || itr->second > citems->poisons.size())
+	aclock;
+	if (!valid)
 		return false;
-	uint64_t cond1 = std::get<3>(citems->poisons[itr->second]);
-	uint64_t cond2 = std::get<4>(citems->poisons[itr->second]);
-	return CalcUsageConditions(cond1, cond2);
+	auto itr = citems.poisonsset.find(item);
+	if (itr == citems.poisonsset.end() || itr->second < 0 || itr->second > citems.poisons.size())
+		return false;
+	return CalcUsageConditionsIntern(citems.poisons[itr->second]);
 }
 bool ActorInfo::CanUseFortify(RE::FormID item)
 {
 	LOG_3("{}[ActorInfo] [CanUseFortify]");
-	auto itr = citems->fortifyset.find(item);
-	if (itr == citems->fortifyset.end() || itr->second < 0 || itr->second > citems->fortify.size())
+	aclock;
+	if (!valid)
 		return false;
-	uint64_t cond1 = std::get<3>(citems->fortify[itr->second]);
-	uint64_t cond2 = std::get<4>(citems->fortify[itr->second]);
-	return CalcUsageConditions(cond1, cond2);
+	auto itr = citems.fortifyset.find(item);
+	if (itr == citems.fortifyset.end() || itr->second < 0 || itr->second > citems.fortify.size())
+		return false;
+	return CalcUsageConditionsIntern(citems.fortify[itr->second]);
 }
 bool ActorInfo::CanUseFood(RE::FormID item)
 {
 	LOG_3("{}[ActorInfo] [CanUseFood]");
-	auto itr = citems->foodset.find(item);
-	if (itr == citems->foodset.end() || itr->second < 0 || itr->second > citems->food.size())
+	aclock;
+	if (!valid)
 		return false;
-	uint64_t cond1 = std::get<3>(citems->food[itr->second]);
-	uint64_t cond2 = std::get<4>(citems->food[itr->second]);
-	return CalcUsageConditions(cond1, cond2);
+	auto itr = citems.foodset.find(item);
+	if (itr == citems.foodset.end() || itr->second < 0 || itr->second > citems.food.size())
+		return false;
+	return CalcUsageConditionsIntern(citems.food[itr->second]);
 }
 
 bool ActorInfo::IsCustomAlchItem(RE::AlchemyItem* item)
 {
 	LOG_3("{}[ActorInfo] [IsCustomAlchItem]");
-	auto itr = citems->potionsset.find(item->GetFormID());
-	if (itr != citems->potionsset.end())
+	auto itr = citems.potionsset.find(item->GetFormID());
+	if (itr != citems.potionsset.end())
 		return true;
-	itr = citems->poisonsset.find(item->GetFormID());
-	if (itr != citems->poisonsset.end())
+	itr = citems.poisonsset.find(item->GetFormID());
+	if (itr != citems.poisonsset.end())
 		return true;
-	itr = citems->fortifyset.find(item->GetFormID());
-	if (itr != citems->fortifyset.end())
+	itr = citems.fortifyset.find(item->GetFormID());
+	if (itr != citems.fortifyset.end())
 		return true;
-	itr = citems->foodset.find(item->GetFormID());
-	if (itr != citems->foodset.end())
+	itr = citems.foodset.find(item->GetFormID());
+	if (itr != citems.foodset.end())
+		return true;
+	return false;
+}
+bool ActorInfo::IsCustomPotion(RE::AlchemyItem* item)
+{
+	LOG_3("{}[ActorInfo] [IsCustomPotion]");
+	auto itr = citems.potionsset.find(item->GetFormID());
+	if (itr != citems.potionsset.end())
+		return true;
+	itr = citems.fortifyset.find(item->GetFormID());
+	if (itr != citems.fortifyset.end())
+		return true;
+	return false;
+}
+bool ActorInfo::IsCustomPoison(RE::AlchemyItem* item)
+{
+	LOG_3("{}[ActorInfo] [IsCustomPoison]");
+	auto itr = citems.poisonsset.find(item->GetFormID());
+	if (itr != citems.poisonsset.end())
+		return true;
+	return false;
+}
+bool ActorInfo::IsCustomFood(RE::AlchemyItem* item)
+{
+	LOG_3("{}[ActorInfo] [IsCustomFood]");
+	auto itr = citems.foodset.find(item->GetFormID());
+	if (itr != citems.foodset.end())
 		return true;
 	return false;
 }
 bool ActorInfo::IsCustomItem(RE::TESBoundObject* item)
 {
 	LOG_3("{}[ActorInfo] [IsCustomItem]");
-	auto itr = citems->itemsset.find(item->GetFormID());
-	if (itr != citems->itemsset.end())
+	auto itr = citems.itemsset.find(item->GetFormID());
+	if (itr != citems.itemsset.end())
 		return true;
 	return false;
 }
 
-bool ActorInfo::CalcUsageConditions(uint64_t conditionsall, uint64_t conditionsany)
+bool ActorInfo::CalcUsageConditions(CustomItem* item)
+{
+	aclock;
+	if (!valid)
+		return false;
+	return CalcUsageConditionsIntern(item);
+}
+
+bool ActorInfo::CalcUsageConditionsIntern(CustomItem* item)
 {
 	LOG_3("{}[ActorInfo] [CalcUsageConditions]");
-	// obligatory conditions (all must be fulfilled)
-	// only if there are conditions
-	if ((conditionsall & CV(CustomItemConditionsAll::kAllUsage)) != 0) {
-		if (conditionsall & CV(CustomItemConditionsAll::kIsBoss)) {
-			LOG_3("{}[ActorInfo] [CalcUsageConditions] [kIsBossAll]");
-			if (!_boss)  // not a boss
+	if (actor.get() && actor.get().get()) {
+		RE::Actor* reac = actor.get().get();
+		// obligatory conditions (all must be fulfilled)
+		// only if there are conditions
+		for (int i = 0; i < item->conditionsall.size(); i++) {
+			switch (std::get<0>(item->conditionsall[i])) {
+			case CustomItemConditionsAll::kIsBoss:
+				if (!_boss)
+					return false;
+				break;
+			case CustomItemConditionsAll::kActorTypeDwarven:
+				if (!_automaton)
+					return false;
+				break;
+			case CustomItemConditionsAll::kHealthThreshold:
+				if (ACM::GetAVPercentage(reac, RE::ActorValue::kHealth) > Settings::NUPSettings::Potions::_healthThreshold)  // over plugin health threshold
+					return false;
+				break;
+			case CustomItemConditionsAll::kMagickaThreshold:
+				if (ACM::GetAVPercentage(reac, RE::ActorValue::kMagicka) > Settings::NUPSettings::Potions::_magickaThreshold)  // over plugin magicka threshold
+					return false;
+				break;
+			case CustomItemConditionsAll::kStaminaThreshold:
+				if (ACM::GetAVPercentage(reac, RE::ActorValue::kStamina) > Settings::NUPSettings::Potions::_staminaThreshold)  // over plugin stamina threshold
+					return false;
+				break;
+			case CustomItemConditionsAll::kHasMagicEffect:
+				{
+					auto tmp = Data::GetSingleton()->FindMagicEffect(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp == nullptr || reac->AsMagicTarget()->HasMagicEffect(tmp) == false)
+						return false;
+				}
+				break;
+			case CustomItemConditionsAll::kHasPerk:
+				{
+					auto tmp = Data::GetSingleton()->FindPerk(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp == nullptr || reac->HasPerk(tmp) == false)
+						return false;
+				}
+				break;
+			case CustomItemConditionsAll::kHasKeyword:
+				{
+					auto tmp = Data::GetSingleton()->FindForm(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp == nullptr)
+						return false;
+					RE::BGSKeyword* kwd = tmp->As<RE::BGSKeyword>();
+					if (kwd == nullptr || (reac->HasKeyword(kwd) == false && reac->GetRace()->HasKeyword(kwd) == false))
+						return false;
+				}
+				break;
+			case CustomItemConditionsAll::kNoCustomObjectUsage:
 				return false;
+			}
 		}
-		if (conditionsall & CV(CustomItemConditionsAll::kHealthThreshold)) {
-			LOG_3("{}[ActorInfo] [CalcUsageConditions] [kHTAll]");
-			if (ACM::GetAVPercentage(actor, RE::ActorValue::kHealth) > Settings::NUPSettings::_healthThreshold)  // over health threshold
-				return false;
-		}
-		if (conditionsall & CV(CustomItemConditionsAll::kMagickaThreshold)) {
-			LOG_3("{}[ActorInfo] [CalcUsageConditions] [kMTAll]");
-			if (ACM::GetAVPercentage(actor, RE::ActorValue::kMagicka) > Settings::NUPSettings::_magickaThreshold)  // over magicka threshold
-				return false;
-		}
-		if (conditionsall & CV(CustomItemConditionsAll::kStaminaThreshold)) {
-			LOG_3("{}[ActorInfo] [CalcUsageConditions] [kSTAll]");
-			if (ACM::GetAVPercentage(actor, RE::ActorValue::kStamina) > Settings::NUPSettings::_staminaThreshold)  // over stamina threshold
-				return false;
-		}
-		if (conditionsall & CV(CustomItemConditionsAll::kActorTypeDwarven)) {
-			LOG_3("{}[ActorInfo] [CalcUsageConditions] [kActAutAll]");
-			if (!_automaton)  // not an automaton
-				return false;
-		}
-	}
 
-	// any conditions (one must be fulfilled)
-	if ((conditionsany & CV(CustomItemConditionsAny::kAllUsage)) == 0) {
-		// no conditions at all
-		return true;
-	}
-	if (conditionsany & CV(CustomItemConditionsAny::kIsBoss)) {
-		LOG_3("{}[ActorInfo] [CalcUsageConditions] [kIsBossAny]");
-		if (_boss)
+		if (item->conditionsany.size() == 0)
 			return true;
-	}
-	if (conditionsany & CV(CustomItemConditionsAll::kHealthThreshold)) {
-		LOG_3("{}[ActorInfo] [CalcUsageConditions] [kHTAny]");
-		if (ACM::GetAVPercentage(actor, RE::ActorValue::kHealth) <= Settings::NUPSettings::_healthThreshold)  // under health threshold
-			return true;
-	}
-	if (conditionsany & CV(CustomItemConditionsAll::kMagickaThreshold)) {
-		LOG_3("{}[ActorInfo] [CalcUsageConditions] [kMTAny]");
-		if (ACM::GetAVPercentage(actor, RE::ActorValue::kMagicka) <= Settings::NUPSettings::_magickaThreshold)  // under magicka threshold
-			return true;
-	}
-	if (conditionsany & CV(CustomItemConditionsAll::kStaminaThreshold)) {
-		LOG_3("{}[ActorInfo] [CalcUsageConditions] [kSTAny]");
-		if (ACM::GetAVPercentage(actor, RE::ActorValue::kStamina) <= Settings::NUPSettings::_staminaThreshold)  // under stamina threshold
-			return true;
-	}
-	if (conditionsall & CV(CustomItemConditionsAll::kActorTypeDwarven)) {
-		LOG_3("{}[ActorInfo] [CalcUsageConditions] [kActAutAny]");
-		if (_automaton)  // an automaton
-			return true;
+
+		for (int i = 0; i < item->conditionsany.size(); i++) {
+			switch (std::get<0>(item->conditionsany[i])) {
+			case CustomItemConditionsAny::kIsBoss:
+				if (_boss)
+					return true;
+				break;
+			case CustomItemConditionsAny::kActorTypeDwarven:
+				if (_automaton)
+					return true;
+				break;
+			case CustomItemConditionsAny::kHealthThreshold:
+				if (ACM::GetAVPercentage(reac, RE::ActorValue::kHealth) <= Settings::NUPSettings::Potions::_healthThreshold)  // under health threshold
+					return true;
+				break;
+			case CustomItemConditionsAny::kMagickaThreshold:
+				if (ACM::GetAVPercentage(reac, RE::ActorValue::kMagicka) <= Settings::NUPSettings::Potions::_magickaThreshold)  // under magicka threshold
+					return true;
+				break;
+			case CustomItemConditionsAny::kStaminaThreshold:
+				if (ACM::GetAVPercentage(reac, RE::ActorValue::kStamina) <= Settings::NUPSettings::Potions::_staminaThreshold)  // under stamina threshold
+					return true;
+				break;
+			case CustomItemConditionsAny::kHasMagicEffect:
+				{
+					auto tmp = Data::GetSingleton()->FindMagicEffect(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp != nullptr && reac->AsMagicTarget()->HasMagicEffect(tmp) == true)
+						return true;
+				}
+				break;
+			case CustomItemConditionsAny::kHasPerk:
+				{
+					auto tmp = Data::GetSingleton()->FindPerk(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp != nullptr && reac->HasPerk(tmp) == true)
+						return true;
+				}
+				break;
+			case CustomItemConditionsAny::kHasKeyword:
+				{
+					auto tmp = Data::GetSingleton()->FindForm(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp != nullptr) {
+						RE::BGSKeyword* kwd = tmp->As<RE::BGSKeyword>();
+						if (kwd != nullptr && (reac->HasKeyword(kwd) || reac->GetRace()->HasKeyword(kwd)))
+							return true;
+					}
+				}
+				break;
+			}
+		}
 	}
 	return false;
 }
 
-bool ActorInfo::CalcDistrConditions(uint64_t conditionsall, uint64_t conditionsany)
+bool ActorInfo::CalcDistrConditions(CustomItem* item)
+{
+	aclock;
+	if (!valid)
+		return false;
+	return CalcDistrConditionsIntern(item);
+}
+
+bool ActorInfo::CalcDistrConditionsIntern(CustomItem* item)
 {
 	LOG_3("{}[ActorInfo] [CalcDistrConditions]");
-	// only check these if there are conditions
-	if ((conditionsall & CV(CustomItemConditionsAny::kAllDistr)) != 0) {
-		if (conditionsall & CV(CustomItemConditionsAll::kIsBoss)) {
-			LOG_3("{}[ActorInfo] [CalcDistrConditions] [kIsBossAll]");
-			if (!_boss)
-				return false;
+	if (actor.get() && actor.get().get()) {
+		RE::Actor* reac = actor.get().get();
+		// only check these if there are conditions
+		for (int i = 0; i < item->conditionsall.size(); i++) {
+			switch (std::get<0>(item->conditionsall[i])) {
+			case CustomItemConditionsAll::kActorTypeDwarven:
+				if (!_automaton)
+					return false;
+				break;
+			case CustomItemConditionsAll::kIsBoss:
+				if (!_boss)
+					return false;
+				break;
+			case CustomItemConditionsAll::kHasMagicEffect:
+				{
+					auto tmp = Data::GetSingleton()->FindMagicEffect(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp == nullptr || reac->AsMagicTarget()->HasMagicEffect(tmp) == false)
+						return false;
+				}
+				break;
+			case CustomItemConditionsAll::kHasPerk:
+				{
+					auto tmp = Data::GetSingleton()->FindPerk(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp == nullptr || reac->HasPerk(tmp) == false)
+						return false;
+				}
+				break;
+			case CustomItemConditionsAll::kHasKeyword:
+				{
+					auto tmp = Data::GetSingleton()->FindForm(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp == nullptr)
+						return false;
+					RE::BGSKeyword* kwd = tmp->As<RE::BGSKeyword>();
+					if (kwd == nullptr || (reac->HasKeyword(kwd) == false && reac->GetRace()->HasKeyword(kwd) == false))
+						return false;
+				}
+				break;
+			case CustomItemConditionsAll::kIsGhost:
+				{
+					if (reac->IsGhost() == false)
+						return false;
+				}
+				break;
+			case CustomItemConditionsAll::kActorStrengthEq:
+				{
+					if (static_cast<uint32_t>(this->actorStrength) != std::get<1>(item->conditionsall[i]))
+						return false;
+				}
+				break;
+			case CustomItemConditionsAll::kActorStrengthLesserEq:
+				{
+					if (static_cast<uint32_t>(this->actorStrength) > std::get<1>(item->conditionsall[i]))
+						return false;
+				}
+				break;
+			case CustomItemConditionsAll::kActorStrengthGreaterEq:
+				{
+					if (static_cast<uint32_t>(this->actorStrength) < std::get<1>(item->conditionsall[i]))
+						return false;
+				}
+				break;
+			case CustomItemConditionsAll::kIsInFaction:
+				{
+					auto tmp = Data::GetSingleton()->FindForm(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp == nullptr)
+						return false;
+					RE::TESFaction* fac = tmp->As<RE::TESFaction>();
+					if (fac == nullptr || reac->IsInFaction(fac) == false)
+						return false;
+				}
+				break;
+			}
+		}
+
+		// no conditions at all
+		if (item->conditionsany.size() == 0)
+			return true;
+
+		for (int i = 0; i < item->conditionsany.size(); i++) {
+			switch (std::get<0>(item->conditionsany[i])) {
+			case CustomItemConditionsAny::kActorTypeDwarven:
+				if (_automaton)
+					return true;
+				break;
+			case CustomItemConditionsAny::kIsBoss:
+				if (_boss)
+					return true;
+				break;
+			case CustomItemConditionsAny::kHasMagicEffect:
+				{
+					auto tmp = Data::GetSingleton()->FindMagicEffect(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp != nullptr && reac->AsMagicTarget()->HasMagicEffect(tmp) == true)
+						return true;
+				}
+				break;
+			case CustomItemConditionsAny::kHasPerk:
+				{
+					auto tmp = Data::GetSingleton()->FindPerk(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp != nullptr && reac->HasPerk(tmp) == true)
+						return true;
+				}
+				break;
+			case CustomItemConditionsAny::kHasKeyword:
+				{
+					auto tmp = Data::GetSingleton()->FindForm(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					RE::BGSKeyword* kwd = tmp->As<RE::BGSKeyword>();
+					if (kwd != nullptr && (reac->HasKeyword(kwd) || reac->GetRace()->HasKeyword(kwd)))
+						return true;
+				}
+				break;
+			case CustomItemConditionsAny::kIsGhost:
+				{
+					if (reac->IsGhost())
+						return true;
+				}
+			case CustomItemConditionsAny::kActorStrengthEq:
+				{
+					if (static_cast<uint32_t>(this->actorStrength) == std::get<1>(item->conditionsall[i]))
+						return true;
+				}
+			case CustomItemConditionsAny::kActorStrengthLesserEq:
+				{
+					if (static_cast<uint32_t>(this->actorStrength) <= std::get<1>(item->conditionsall[i]))
+						return true;
+				}
+			case CustomItemConditionsAny::kActorStrengthGreaterEq:
+				{
+					if (static_cast<uint32_t>(this->actorStrength) >= std::get<1>(item->conditionsall[i]))
+						return true;
+				}
+				break;
+			case CustomItemConditionsAll::kIsInFaction:
+				{
+					auto tmp = Data::GetSingleton()->FindForm(std::get<1>(item->conditionsall[i]), std::get<2>(item->conditionsall[i]));
+					if (tmp != nullptr) {
+						RE::TESFaction* fac = tmp->As<RE::TESFaction>();
+						if (fac == nullptr || reac->IsInFaction(fac))
+							return true;
+					}
+				}
+				break;
+			}
 		}
 	}
+	return false;
+}
 
-	if ((conditionsany & CV(CustomItemConditionsAny::kAllDistr)) == 0) {
-		// no conditions at all
-		return true;
-	}
-	if (conditionsany & CV(CustomItemConditionsAny::kIsBoss)) {
-		LOG_3("{}[ActorInfo] [CalcDistrConditions] [kIsBossAny]");
-		if (_boss)
-			return true;
-	}
+bool ActorInfo::IsInCombat()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+	if (RE::Actor* _actor = actor.get().get(); _actor != nullptr)
+		return _actor->IsInCombat();
 	return false;
 }
 
 void ActorInfo::CustomItems::CreateMaps()
 {
-	LOG_3("{}[ActorInfo] [CreateMaps]");
+	LOG_3("{}[ActorInfo] [CreatMaps]");
 	// items map
 	itemsset.clear();
 	for (int i = 0; i < items.size(); i++) {
-		itemsset.insert_or_assign(std::get<0>(items[i])->GetFormID(), i);
+		itemsset.insert_or_assign(items[i]->object->GetFormID(), i);
 	}
 	// death map
 	deathset.clear();
 	for (int i = 0; i < death.size(); i++) {
-		deathset.insert_or_assign(std::get<0>(death[i])->GetFormID(), i);
+		deathset.insert_or_assign(death[i]->object->GetFormID(), i);
 	}
 	// potions map
 	potionsset.clear();
 	for (int i = 0; i < potions.size(); i++) {
-		potionsset.insert_or_assign(std::get<0>(potions[i])->GetFormID(), i);
+		potionsset.insert_or_assign(potions[i]->object->GetFormID(), i);
 	}
 	// poisons map
 	poisonsset.clear();
 	for (int i = 0; i < poisons.size(); i++) {
-		poisonsset.insert_or_assign(std::get<0>(poisons[i])->GetFormID(), i);
+		poisonsset.insert_or_assign(poisons[i]->object->GetFormID(), i);
 	}
 	// food map
 	foodset.clear();
 	for (int i = 0; i < food.size(); i++) {
-		foodset.insert_or_assign(std::get<0>(food[i])->GetFormID(), i);
+		foodset.insert_or_assign(food[i]->object->GetFormID(), i);
 	}
 	// fortify map
 	fortifyset.clear();
 	for (int i = 0; i < fortify.size(); i++) {
-		fortifyset.insert_or_assign(std::get<0>(fortify[i])->GetFormID(), i);
+		fortifyset.insert_or_assign(fortify[i]->object->GetFormID(), i);
 	}
 }
 
@@ -360,12 +829,8 @@ int32_t ActorInfo::GetDataSize()
 	// actor id
 	//size += 4;
 	// pluginname
-	size += Buffer::CalcStringLength(std::string(Utility::GetPluginName(actor)));
-	// durHealth, durMagicka, durStamina, durFortify, durRegeneration
-	//size += 20;
-	// nextFoodTime
-	//size ´+= 4;
-	// lastDistrTime
+	size += Buffer::CalcStringLength(pluginname);
+	// durCombat
 	//size += 4;
 	// distributedCustomItems
 	//size += 1;
@@ -373,36 +838,14 @@ int32_t ActorInfo::GetDataSize()
 	//size += 8;
 	// _boss
 	//size += 1;
+	// valid
+	//size += 1;
+	// _haslefthand
+	//size += 1;
+
 
 	// all except string are constant:
-	size += 46;
-
-
-	// diseasestats
-	// LastGameTime
-	size += 4;
-	// num diseases
-	size += 4;
-		// diseaseinfo
-		// disease
-		// dinfosize += 4;
-		// stage
-		// dinfosize += 4;
-		// advPoints
-		// dinfosize += 4;
-		// earliestAdvancement
-		// dinfosize += 4;
-		// status
-		// dinfosize += 4;
-		// immuneUntil
-		// dinfosize += 4;
-		// permanentModifierPoints
-		// dinfosize += 4;
-		// permanentModifiers
-		// dinfosize += 4;
-		// 32
-	//size += diseases.size() * dinfosize;
-	size += (int)dinfo->diseases.size() * 32;
+	size += 24;
 	return size;
 }
 
@@ -410,36 +853,33 @@ int32_t ActorInfo::GetMinDataSize(int32_t vers)
 {
 	switch (vers) {
 	case 0x10000001:
-		return 46 /*base*/ + 8 /*dinfo*/;
+		return 24;
 	default:
 		return 0;
 	}
 }
 
-void ActorInfo::WriteData(unsigned char* buffer, int offset)
+bool ActorInfo::WriteData(unsigned char* buffer, int offset)
 {
+	aclock;
 	int addoff = 0;
 	// version
 	Buffer::Write(version, buffer, offset);
+	// valid
+	Buffer::Write(valid, buffer, offset);
 	// actor id
-	Buffer::Write(actor->GetFormID(), buffer, offset);
-	// pluginname
-	Buffer::Write(std::string(Utility::GetPluginName(actor)), buffer, offset);
-	std::string tmp = std::string(Utility::GetPluginName(actor));
-	// durHealth
-	Buffer::Write(durHealth, buffer, offset);
-	// durMagicka
-	Buffer::Write(durMagicka, buffer, offset);
-	// durStamina
-	Buffer::Write(durStamina, buffer, offset);
-	// durFortify
-	Buffer::Write(durFortify, buffer, offset);
-	// durRegeneration
-	Buffer::Write(durRegeneration, buffer, offset);
-	// nextFoodTime
-	Buffer::Write(nextFoodTime, buffer, offset);
-	// lastDistrTime
-	Buffer::Write(lastDistrTime, buffer, offset);
+	if ((formid & 0xFF000000) == 0xFF000000) {
+		// temporary id, save whole id
+		Buffer::Write(formid, buffer, offset);
+	} else if ((formid & 0xFF000000) == 0xFE000000) {
+		// only save index in light plugin
+		Buffer::Write(formid & 0x00000FFF, buffer, offset);
+	} else {
+		// save index in normal plugin
+		Buffer::Write(formid & 0x00FFFFFF, buffer, offset);
+	}
+	// durCombat
+	Buffer::Write(durCombat, buffer, offset);
 	// distributedCustomItems
 	Buffer::Write(_distributedCustomItems, buffer, offset);
 	// actorStrength
@@ -448,80 +888,69 @@ void ActorInfo::WriteData(unsigned char* buffer, int offset)
 	Buffer::Write(static_cast<uint32_t>(itemStrength), buffer, offset);
 	// _boss
 	Buffer::Write(_boss, buffer, offset);
-
-	// dinfo
-	// LastGameTime
-	Buffer::Write(dinfo->LastGameTime, buffer, offset);
-	// num diseases
-	Buffer::Write((uint32_t)(dinfo->diseases.size()), buffer, offset);
-	for (int i = 0; i < dinfo->diseases.size(); i++) {
-		// disease
-		Buffer::Write(static_cast<uint32_t>(dinfo->diseases[i]->disease), buffer, offset);
-		// stage
-		Buffer::Write(dinfo->diseases[i]->stage, buffer, offset);
-		// advPoints
-		Buffer::Write(dinfo->diseases[i]->advPoints, buffer, offset);
-		// earliestAdvancement
-		Buffer::Write(dinfo->diseases[i]->earliestAdvancement, buffer, offset);
-		// status
-		Buffer::Write(static_cast<uint32_t>(dinfo->diseases[i]->status), buffer, offset);
-		// immuneUntil
-		Buffer::Write(dinfo->diseases[i]->immuneUntil, buffer, offset);
-		// permanentModifierPoint
-		Buffer::Write(dinfo->diseases[i]->permanentModifiersPoints, buffer, offset);
-		// permanentModifiers
-		Buffer::Write(static_cast<uint32_t>(dinfo->diseases[i]->permanentModifiers), buffer, offset);
-	}
+	// _haslefthand
+	Buffer::Write(_haslefthand, buffer, offset);
+	return true;
 }
 
 bool ActorInfo::ReadData(unsigned char* buffer, int offset, int length)
 {
+	aclock;
 	int ver = Buffer::ReadUInt32(buffer, offset);
 	try {
 		switch (ver) {
 		case 0x10000001:
 			{
+				valid = Buffer::ReadBool(buffer, offset);
+
 				// first try to make sure that the buffer contains all necessary data and we do not go out of bounds
 				int size = GetMinDataSize(ver);
 				int strsize = (int)Buffer::CalcStringLength(buffer, offset + 4);  // offset + actorid is begin of pluginname
 				if (length < size + strsize)
 					return false;
 
-				uint32_t actorid = Buffer::ReadUInt32(buffer, offset);
-				std::string pluginname = Buffer::ReadString(buffer, offset);
-				RE::TESForm* form = Utility::GetTESForm(RE::TESDataHandler::GetSingleton(), actorid, pluginname);
-				if (!form)
+				formid.SetID(Buffer::ReadUInt32(buffer, offset));
+				pluginname = Buffer::ReadString(buffer, offset);
+				// if the actorinfo is not valid, then do not evaluate the actor
+				RE::TESForm* form = Utility::GetTESForm(RE::TESDataHandler::GetSingleton(), formid, pluginname);
+				if (form == nullptr) {
+					form = RE::TESForm::LookupByID(formid);
+					if (!form) {
+						return false;
+					}
+				}
+				RE::Actor* reac = form->As<RE::Actor>();
+				if (reac == nullptr) {
 					return false;
-				actor = form->As<RE::Actor>();
-				if (!actor)
-					return false;
-				durHealth = Buffer::ReadInt32(buffer, offset);
-				durMagicka = Buffer::ReadInt32(buffer, offset);
-				durStamina = Buffer::ReadInt32(buffer, offset);
-				durFortify = Buffer::ReadInt32(buffer, offset);
-				durRegeneration = Buffer::ReadInt32(buffer, offset);
-				nextFoodTime = Buffer::ReadFloat(buffer, offset);
-				lastDistrTime = Buffer::ReadFloat(buffer, offset);
+				}
+				actor = reac->GetHandle();
+				// set formid to the full formid including plugin index
+				formid.SetID(reac->GetFormID());
+
+				name = reac->GetName();
+				durCombat = Buffer::ReadInt32(buffer, offset);
 				_distributedCustomItems = Buffer::ReadBool(buffer, offset);
 				actorStrength = static_cast<ActorStrength>(Buffer::ReadUInt32(buffer, offset));
 				itemStrength = static_cast<ItemStrength>(Buffer::ReadUInt32(buffer, offset));
 				_boss = Buffer::ReadBool(buffer, offset);
+				_haslefthand = Buffer::ReadBool(buffer, offset);
 
-				// dinfo
-				if (dinfo == nullptr)
-					dinfo = new DiseaseStats();
-				dinfo->LastGameTime = Buffer::ReadFloat(buffer, offset);
-				int numdis = Buffer::ReadUInt32(buffer, offset);
-				for (int i = 0; i < numdis; i++) {
-					DiseaseInfo* info = new DiseaseInfo();
-					info->disease = static_cast<Diseases::Disease>(Buffer::ReadUInt32(buffer, offset));
-					info->stage = Buffer::ReadInt32(buffer, offset);
-					info->advPoints = Buffer::ReadFloat(buffer, offset);
-					info->earliestAdvancement = Buffer::ReadFloat(buffer, offset);
-					info->status = static_cast<DiseaseStatus>(Buffer::ReadUInt32(buffer, offset));
-					info->immuneUntil = Buffer::ReadFloat(buffer, offset);
-					info->permanentModifiersPoints = Buffer::ReadFloat(buffer, offset);
-					info->permanentModifiers = static_cast<EnumType>(Buffer::ReadUInt32(buffer, offset));
+				// init dependend stuff
+				pluginID = Utility::Mods::GetPluginIndex(pluginname);
+				if (pluginID == 0x1) {
+					pluginID = Utility::ExtractTemplateInfo(reac->GetActorBase()).pluginID;
+				}
+				_formstring = Utility::PrintForm(this);
+				// get original id
+				if (const auto extraLvlCreature = reac->extraList.GetByType<RE::ExtraLeveledCreature>()) {
+					if (const auto originalBase = extraLvlCreature->originalBase) {
+						formid.SetOriginalID(originalBase->GetFormID());
+					}
+					if (const auto templateBase = extraLvlCreature->templateBase) {
+						formid.AddTemplateID(templateBase->GetFormID());
+					}
+				} else {
+					formid.SetOriginalID(reac->GetActorBase()->GetFormID());
 				}
 			}
 			return true;
@@ -532,3 +961,526 @@ bool ActorInfo::ReadData(unsigned char* buffer, int offset, int length)
 		return false;
 	}
 }
+
+void ActorInfo::Update()
+{
+	aclock;
+	if (!valid)
+		return;
+	if (RE::Actor* reac = actor.get().get(); reac != nullptr) {
+		// update vampire status
+		_vampire = false;
+		if (reac->HasKeyword(Settings::GameObj::Vampire) || reac->GetRace()->HasKeyword(Settings::GameObj::Vampire))
+			_vampire = true;
+		// update the metrics, since we are sure our object is valid
+		UpdateMetrics(reac);
+	} else {
+		SetInvalid();
+	}
+}
+
+std::weak_ptr<ActorInfo> ActorInfo::GetTarget()
+{
+	aclock;
+	if (!valid)
+		return std::weak_ptr<ActorInfo>{};
+	return target;
+}
+
+void ActorInfo::ResetTarget()
+{
+	aclock;
+	target = std::weak_ptr<ActorInfo>{};
+}
+
+void ActorInfo::SetTarget(std::weak_ptr<ActorInfo> tar)
+{
+	aclock;
+	if (!valid || dead)
+		target = std::weak_ptr<ActorInfo>{};
+	else
+		target = tar;
+}
+
+short ActorInfo::GetTargetLevel()
+{
+	aclock;
+	if (!valid || dead)
+		return 1;
+	if (std::shared_ptr<ActorInfo> tar = target.lock()) {
+		return tar->GetLevel();
+	}
+	return 1;
+}
+
+bool ActorInfo::GetHandleActor()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+	return handleactor;
+}
+
+void ActorInfo::SetHandleActor(bool handle)
+{
+	aclock;
+	if (!valid || dead)
+		handleactor = false;
+	else
+		handleactor = handle;
+}
+
+float ActorInfo::GetPlayerDistance()
+{
+	aclock;
+	if (!valid)
+		return FLT_MAX;
+	return playerDistance;
+}
+
+void ActorInfo::SetPlayerDistance(float distance)
+{
+	aclock;
+	if (!valid || dead)
+		playerDistance = FLT_MAX;
+	else
+		playerDistance = distance;
+}
+
+bool ActorInfo::GetPlayerHostile()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+	return playerHostile;
+}
+
+void ActorInfo::SetPlayerHostile(bool hostile)
+{
+	aclock;
+	if (!valid || dead)
+		playerHostile = false;
+	playerHostile = hostile;
+}
+
+bool ActorInfo::GetWeaponsDrawn()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+	if (RE::Actor* _actor = actor.get().get(); _actor != nullptr) {
+		return _actor->AsActorState()->IsWeaponDrawn();
+	}
+	return false;
+}
+
+void ActorInfo::SetWeaponsDrawn(bool drawn)
+{
+	aclock;
+	if (!valid || dead)
+		return;
+	if (RE::Actor* _actor = actor.get().get(); _actor != nullptr) {
+		_actor->DrawWeaponMagicHands(drawn);
+	}
+}
+
+#pragma region ActorSpecificFunctions
+
+bool ActorInfo::IsFollower()
+{
+	aclock;
+	if (!valid)
+		return false;
+
+	if (actor.get() && actor.get().get()) {
+		RE::Actor* reac = actor.get().get();
+		bool follower = reac->IsInFaction(Settings::GameObj::CurrentFollowerFaction) || reac->IsInFaction(Settings::GameObj::CurrentHirelingFaction);
+		if (follower)
+			return true;
+		if (reac->GetActorBase()) {
+			auto itr = reac->GetActorBase()->factions.begin();
+			while (itr != reac->GetActorBase()->factions.end()) {
+				if (Distribution::followerFactions()->contains(itr->faction->GetFormID()) && itr->rank >= 0)
+					return true;
+				itr++;
+			}
+		}
+	}
+	return false;
+}
+
+bool ActorInfo::IsPlayer()
+{
+	return formid == 0x14;
+}
+
+RE::TESObjectREFR::InventoryItemMap ActorInfo::GetInventory()
+{
+	aclock;
+	if (!valid)
+		return RE::TESObjectREFR::InventoryItemMap{};
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->GetInventory();
+	return RE::TESObjectREFR::InventoryItemMap{};
+}
+
+RE::TESObjectREFR::InventoryCountMap ActorInfo::GetInventoryCounts()
+{
+	aclock;
+	if (!valid)
+		return RE::TESObjectREFR::InventoryCountMap{};
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->GetInventoryCounts();
+	return RE::TESObjectREFR::InventoryCountMap{};
+}
+
+bool ActorInfo::HasMagicEffect(RE::EffectSetting* effect)
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->AsMagicTarget()->HasMagicEffect(effect);
+	return false;
+}
+
+bool ActorInfo::DrinkPotion(RE::AlchemyItem* potion, RE::ExtraDataList* extralist)
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->DrinkPotion(potion, extralist);
+	return false;
+}
+
+RE::InventoryEntryData* ActorInfo::GetEquippedEntryData(bool leftHand)
+{
+	aclock;
+	if (!valid || dead)
+		return nullptr;
+
+	if (!leftHand || _haslefthand)
+		if (actor.get() && actor.get().get())
+			return actor.get().get()->GetEquippedEntryData(leftHand);
+	return nullptr;
+}
+
+void ActorInfo::RemoveItem(RE::TESBoundObject* item, int32_t count)
+{
+	aclock;
+	if (!valid)
+		return;
+
+	if (actor.get() && actor.get().get())
+		actor.get().get()->RemoveItem(item, count, RE::ITEM_REMOVE_REASON::kRemove, nullptr, nullptr);
+}
+
+void ActorInfo::AddItem(RE::TESBoundObject* item, int32_t count)
+{
+	aclock;
+	if (!valid)
+		return;
+
+	if (actor.get() && actor.get().get())
+		actor.get().get()->AddObjectToContainer(item, nullptr, count, nullptr);
+}
+
+uint32_t ActorInfo::GetFormFlags()
+{
+	aclock;
+	if (!valid || dead)
+		return 0;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->formFlags;
+	return 0;
+}
+
+bool ActorInfo::IsDead()
+{
+	aclock;
+	if (!valid || dead)
+		return true;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->IsDead();
+	return true;
+}
+
+RE::TESNPC* ActorInfo::GetActorBase()
+{
+	aclock;
+	if (!valid)
+		return nullptr;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->GetActorBase();
+	return nullptr;
+}
+
+RE::FormID ActorInfo::GetActorBaseFormID()
+{
+	aclock;
+	if (!valid)
+		return 0;
+
+	if (actor.get() && actor.get().get())
+		if (actor.get().get()->GetActorBase())
+			return actor.get().get()->GetActorBase()->GetFormID();
+	return 0;
+}
+
+std::string ActorInfo::GetActorBaseFormEditorID()
+{
+	aclock;
+	if (!valid)
+		return "";
+
+	if (actor.get() && actor.get().get())
+		if (actor.get().get()->GetActorBase())
+			return actor.get().get()->GetActorBase()->GetFormEditorID();
+	return "";
+}
+
+RE::TESObjectCELL* ActorInfo::GetParentCell()
+{
+	aclock;
+	if (!valid)
+		return nullptr;
+
+	if (RE::Actor* _actor = actor.get().get(); _actor != nullptr)
+		return _actor->GetParentCell();
+	return nullptr;
+}
+
+SKSE::stl::enumeration<RE::TESObjectCELL::Flag, std::uint16_t> ActorInfo::GetParentCellFlags()
+{
+	aclock;
+	if (!valid)
+		return SKSE::stl::enumeration<RE::TESObjectCELL::Flag, std::uint16_t>{};
+
+	if (RE::Actor* _actor = actor.get().get(); _actor != nullptr)
+		return _actor->GetParentCell()->cellFlags;
+	return SKSE::stl::enumeration<RE::TESObjectCELL::Flag, std::uint16_t>{};
+}
+
+RE::TESWorldSpace* ActorInfo::GetWorldspace()
+{
+	aclock;
+	if (!valid)
+		return nullptr;
+
+	if (RE::Actor* _actor = actor.get().get(); _actor != nullptr)
+		return _actor->GetWorldspace();
+	return nullptr;
+}
+
+RE::FormID ActorInfo::GetWorldspaceID()
+{
+	aclock;
+	if (!valid)
+		return 0;
+
+	if (RE::Actor* _actor = actor.get().get(); _actor != nullptr)
+		return _actor->GetWorldspace() != nullptr ? _actor->GetWorldspace()->GetFormID() : 0;
+	return 0;
+}
+
+RE::NiPoint3 ActorInfo::GetPosition()
+{
+	aclock;
+	if (!valid)
+		return RE::NiPoint3{};
+
+	if (RE::Actor* _actor = actor.get().get(); _actor != nullptr)
+		return _actor->GetPosition();
+	return RE::NiPoint3{};
+}
+
+RE::TESCombatStyle* ActorInfo::GetCombatStyle()
+{
+	aclock;
+	if (!valid)
+		return nullptr;
+
+	if (actor.get() && actor.get().get())
+		if (actor.get().get()->GetActorBase())
+			return actor.get().get()->GetActorBase()->GetCombatStyle();
+	return nullptr;
+}
+
+RE::TESRace* ActorInfo::GetRace()
+{
+	aclock;
+	if (!valid)
+		return nullptr;
+
+	if (actor.get() && actor.get().get())
+		if (actor.get().get()->GetActorBase())
+			return actor.get().get()->GetActorBase()->GetRace();
+	return nullptr;
+}
+
+RE::FormID ActorInfo::GetRaceFormID()
+{
+	aclock;
+	if (!valid)
+		return 0;
+
+	if (actor.get() && actor.get().get())
+		if (actor.get().get()->GetActorBase() && actor.get().get()->GetActorBase()->GetRace())
+			return actor.get().get()->GetActorBase()->GetRace()->GetFormID();
+	return 0;
+}
+
+bool ActorInfo::IsGhost()
+{
+	aclock;
+	if (!valid)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->IsGhost();
+	return false;
+}
+
+bool ActorInfo::IsSummonable()
+{
+	aclock;
+	if (!valid)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		if (actor.get().get()->GetActorBase())
+			return actor.get().get()->GetActorBase()->IsSummonable();
+	return false;
+}
+
+bool ActorInfo::Bleeds()
+{
+	aclock;
+	if (!valid)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		if (actor.get().get()->GetActorBase())
+			return actor.get().get()->GetActorBase()->Bleeds();
+	return false;
+}
+
+short ActorInfo::GetLevel()
+{
+	aclock;
+	if (!valid)
+		return 1;
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->GetLevel();
+	return 1;
+}
+
+SKSE::stl::enumeration<RE::Actor::BOOL_BITS, uint32_t> ActorInfo::GetBoolBits()
+{
+	aclock;
+	if (!valid)
+		return SKSE::stl::enumeration<RE::Actor::BOOL_BITS, uint32_t>{};
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->GetActorRuntimeData().boolBits;
+	return SKSE::stl::enumeration<RE::Actor::BOOL_BITS, uint32_t>{};
+}
+
+bool ActorInfo::IsFlying()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->AsActorState()->IsFlying();
+	return false;
+}
+
+bool ActorInfo::IsInKillMove()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->IsInKillMove();
+	return false;
+}
+
+bool ActorInfo::IsInMidair()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->IsInMidair();
+	return false;
+}
+
+bool ActorInfo::IsInRagdollState()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->IsInRagdollState();
+	return false;
+}
+
+bool ActorInfo::IsUnconscious()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->AsActorState()->IsUnconscious();
+	return false;
+}
+
+bool ActorInfo::IsParalyzed()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		if (actor.get().get()->GetActorRuntimeData().boolBits & RE::Actor::BOOL_BITS::kParalyzed)
+			return true;
+	return false;
+}
+
+bool ActorInfo::IsStaggered()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->AsActorState()->actorState2.staggered;
+	return false;
+}
+
+bool ActorInfo::IsBleedingOut()
+{
+	aclock;
+	if (!valid || dead)
+		return false;
+
+	if (actor.get() && actor.get().get())
+		return actor.get().get()->AsActorState()->IsBleedingOut();
+	return false;
+}
+
+#pragma endregion

@@ -1,7 +1,7 @@
 #include "Events.h"
 #include "Settings.h"
 #include "Game.h"
-#include "Interface/NUPInterface.h"
+#include "APIs/NUPInterface.h"
 #include "DataStorage.h"
 #include "Data.h"
 
@@ -33,9 +33,12 @@ namespace
 		spdlog::set_default_logger(std::move(log));
 		//spdlog::set_pattern("%g(%#): [%^%l%$] %v"s);
 		spdlog::set_pattern("%s(%#): [%^%l%$] %v"s);
+
+		Profile::Init(Settings::PluginNamePlain);
+		LogUsage::Init(Settings::PluginNamePlain);
 	}
 }
-
+/*
 #	if defined(SKYRIM_SUPPORT_AE353)
 // AE before 1.6.353
 extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() {
@@ -86,19 +89,71 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface * 
 	return true;
 }
 #endif
+*/
+
+extern "C" DLLEXPORT constinit auto SKSEPlugin_Version = []() {
+	SKSE::PluginVersionData v;
+
+	v.PluginVersion(Plugin::VERSION);
+	v.PluginName(Plugin::NAME);
+	v.AuthorName("KoeniglichePM");
+
+	v.UsesAddressLibrary();
+	v.CompatibleVersions({ SKSE::RUNTIME_SSE_LATEST, SKSE::RUNTIME_LATEST_VR });
+	v.UsesNoStructs();
+
+	return v;
+}();
+
+extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface* a_skse, SKSE::PluginInfo* a_info)
+{
+	InitializeLog();
+	a_info->infoVersion = SKSE::PluginInfo::kVersion;
+	a_info->name = Plugin::NAME.data();
+	a_info->version = Plugin::VERSION[0];
+
+	if (a_skse->IsEditor()) {
+		logger::critical("Loaded in editor, marking as incompatible"sv);
+		return false;
+	}
+
+	const auto ver = a_skse->RuntimeVersion();
+	if (ver < SKSE::RUNTIME_SSE_1_5_39) {
+		logger::critical(FMT_STRING("Unsupported runtime version {}"), ver.string());
+		return false;
+	}
+	return true;
+} 
 
 void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 {
+	auto begin = std::chrono::steady_clock::now();
 	switch(a_msg->type) {
 	case SKSE::MessagingInterface::kDataLoaded:
+		// init ActorInfo's statics
+		ActorInfo::Init();
+		// init Data
+		Data::GetSingleton()->Init();
+		// init game objects and load pluginnames
+		Settings::LoadGameObjects();
 		// load settings
-		Settings::LoadNUP(); 
-		Settings::LoadAlchExt();  // also resaves the file
+		Settings::NUPSettings::LoadNUP(); 
+		Settings::Load();  // also resaves the file
 		logger::info("Settings loaded");
 		// load distribution settings
 		Settings::LoadDistrConfigNUP();
-		Settings::LoadDistrConfigAlchExt();
+		Settings::LoadDistrConfig();
 		logger::info("Distribution configuration loaded");
+		// before classifying items make sure compatibility loads everything it can
+		Compatibility::GetSingleton()->Load();
+		// classify currently loaded game items
+		Settings::ClassifyItems();
+		logger::info("Items classified");
+		// register data storage
+		// datastorage must always register game callbacks before events, to ensure read data is present
+		Storage::Register();
+		// register compatibility
+		Compatibility::Register();
 		// register eventhandlers
 		Events::RegisterAllEventHandlers();
 		logger::info("Registered Events");
@@ -106,6 +161,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 		Storage::Register();
 		// init diseases
 		Data::GetSingleton()->InitDiseases();
+		PROF1_1("{}[main] [Startup] execution time: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()));
 		break;
 	case SKSE::MessagingInterface::kPostLoad:
 		Settings::Interfaces::RequestAPIs();

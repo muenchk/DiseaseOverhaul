@@ -1,6 +1,22 @@
 #include "Disease.h"
 #include "Logging.h"
 
+Disease::Disease()
+{
+	_stageInfection = new DiseaseStage();
+}
+
+Disease::~Disease()
+{
+	if (_stageInfection != nullptr)
+		delete _stageInfection;
+	for (int i = 0; i < _numstages; i++)
+	{
+		if (_stages[i] != nullptr)
+			delete _stages[i];
+	}
+}
+
 bool Disease::ParticleSpread()
 {
 	return flags & DiseaseFlags::kParticleSpread;

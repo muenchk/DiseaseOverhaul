@@ -10,12 +10,14 @@
 #include <tuple>
 #include <vector>
 
+#include "Compatibility.h"
 #include "Settings.h"
 #include "Data.h"
 #include "UtilityAlch.h"
 
+using Comp = Compatibility;
+
 using ActorStrength = ActorStrength;
-using AlchemyEffect = AlchemyEffect;
 using ItemStrength = ItemStrength;
 using ItemType = Settings::ItemType;
 
@@ -25,6 +27,35 @@ static std::mt19937 randi((unsigned int)(std::chrono::system_clock::now().time_s
 /// </summary>
 static std::uniform_int_distribution<signed> randRR(1, RandomRange);
 static std::uniform_int_distribution<signed> rand100(1, 100);
+
+#pragma region Interfaces
+
+void Settings::Interfaces::RequestAPIs()
+{
+	loginfo("[SETTINGS] [RequestInterfaces]");
+	// get tmp api
+	if (!tdm_api) {
+		loginfo("[SETTINGS] [RequestInterfaces] Trying to get True Directional Movement API");
+		tdm_api = reinterpret_cast<TDM_API::IVTDM1*>(TDM_API::RequestPluginAPI(TDM_API::InterfaceVersion::V1));
+		if (tdm_api) {
+			loginfo("[SETTINGS] [RequestInterfaces] Acquired True Directional Movement API");
+		} else {
+			loginfo("[SETTINGS] [RequestInterfaces] Failed to get True Directional Movement API");
+		}
+	}
+	// get nupinter
+	if (!nupinter) {
+		loginfo("[SETTINGS] [RequestInterfaces] Trying to get NPCsUsePotions API");
+		nupinter = reinterpret_cast<NPCsUsePotions::NUPInterface*>(NPCsUsePotions::RequestPluginAPI());
+		if (nupinter) {
+			loginfo("[SETTINGS] [RequestInterfaces] Acquired NPCsUsePotions API");
+		} else {
+			loginfo("[SETTINGS] [RequestInterfaces] Failed to get NPCsUsePotions API");
+		}
+	}
+}
+
+#pragma endregion
 
 #pragma region Settings
 
@@ -53,6 +84,14 @@ void Settings::LoadGameObjects()
 	if (Settings::GameObj::ActorTypeDwarven == nullptr) {
 		logger::info("[INIT] Couldn't find ActorTypeDwarven Keyword in game.");
 	}
+	Settings::GameObj::ActorTypeCreature = RE::TESForm::LookupByID<RE::BGSKeyword>(0x13795);
+	if (Settings::GameObj::ActorTypeCreature == nullptr) {
+		loginfo("[Settings] [INIT] Couldn't find ActorTypeCreature Keyword in game.");
+	}
+	Settings::GameObj::ActorTypeAnimal = RE::TESForm::LookupByID<RE::BGSKeyword>(0x13798);
+	if (Settings::GameObj::ActorTypeAnimal == nullptr) {
+		loginfo("[Settings] [INIT] Couldn't find ActorTypeAnimal Keyword in game.");
+	}
 	Settings::GameObj::Vampire = RE::TESForm::LookupByID<RE::BGSKeyword>(0xA82BB);
 	if (Settings::GameObj::ActorTypeDwarven == nullptr) {
 		logger::info("[INIT] Couldn't find Vampire Keyword in game.");
@@ -80,14 +119,88 @@ void Settings::LoadGameObjects()
 		logger::info("[INIT] Couldn't find WerewolfImmunity Spell in game.");
 	}
 
+	loginfo("[SETTINGS] [InitGameStuff] Load Game Stuff");
+	RE::TESDataHandler* datahandler = RE::TESDataHandler::GetSingleton();
+	const RE::TESFile* file = nullptr;
+	uint32_t index = 0;
+	for (int i = 0; i <= 254; i++) {
+		file = datahandler->LookupLoadedModByIndex((uint8_t)i);
+		if (file) {
+			pluginnames[i] = std::string(file->GetFilename());
+			index = (uint32_t)i << 24;
+			pluginNameMap.insert_or_assign(pluginnames[i], index);
+			pluginIndexMap.insert_or_assign(index, pluginnames[i]);
+		} else
+			pluginnames[i] = "";
+	}
+	// 0xFF... is reserved for objects created by the game during runtime
+	pluginnames[255] = "runtime";
+	for (int i = 0; i <= 4095; i++) {
+		file = datahandler->LookupLoadedLightModByIndex((uint16_t)i);
+		if (file) {
+			pluginnames[256 + i] = std::string(file->GetFilename());
+			index = 0xFE000000 | ((uint32_t)i << 12);
+			pluginNameMap.insert_or_assign(pluginnames[256 + i], index);
+			pluginIndexMap.insert_or_assign(index, pluginnames[256 + i]);
+		} else
+			pluginnames[256 + i] = "";
+	}
+
+	Settings::GameObj::Equip_LeftHand = RE::TESForm::LookupByID<RE::BGSEquipSlot>(0x13F43);
+	Settings::GameObj::Equip_RightHand = RE::TESForm::LookupByID<RE::BGSEquipSlot>(0x13F42);
+	Settings::GameObj::Equip_EitherHand = RE::TESForm::LookupByID<RE::BGSEquipSlot>(0x13F44);
+	Settings::GameObj::Equip_BothHands = RE::TESForm::LookupByID<RE::BGSEquipSlot>(0x13F45);
+	Settings::GameObj::Equip_Shield = RE::TESForm::LookupByID<RE::BGSEquipSlot>(0x141E8);
+	Settings::GameObj::Equip_Voice = RE::TESForm::LookupByID<RE::BGSEquipSlot>(0x25BEE);
+	Settings::GameObj::Equip_Potion = RE::TESForm::LookupByID<RE::BGSEquipSlot>(0x35698);
+
+
+	// get ITMPoisonUse as sound for applying poisons
+	// ITMPoisonUse
+	Settings::GameObj::PoisonUse = RE::TESForm::LookupByID<RE::BGSSoundDescriptorForm>(0x106614);
+	// get ITMPotionUse for sound fixes
+	// ITMPotionUse
+	Settings::GameObj::PotionUse = RE::TESForm::LookupByID<RE::BGSSoundDescriptorForm>(0xB6435);
+	// ITMFoodEat
+	Settings::GameObj::FoodEat = RE::TESForm::LookupByID<RE::BGSSoundDescriptorForm>(0xCAF94);
+
 	/// load disease objects
+}
+
+std::set<RE::FormID> Settings::CalcRacesWithoutPotionSlot()
+{
+	LOG_1("{}[Settings] [ExcludeRacesWithoutPotionSlot]");
+	std::set<RE::FormID> ret;
+	auto races = RE::TESDataHandler::GetSingleton()->GetFormArray<RE::TESRace>();
+	LOG1_1("{}[Settings] [ExcludeRacesWithoutPotionSlot] found {} races.", races.size());
+	for (RE::TESRace* race : races) {
+		bool potionenabled = false;
+		for (auto slot : race->equipSlots) {
+			if (slot->GetFormID() == 0x35698)
+				potionenabled = true;
+		}
+		if (potionenabled == false) {
+			ret.insert(race->GetFormID());
+			LOG1_1("{}[Settings] [ExcludeRacesWithoutPotionSlot] {} does not have potion slot and has been excluded.", Utility::PrintForm(race));
+		}
+	}
+	LOG_1("{}[Settings] [ExcludeRacesWithoutPotionSlot] end");
+	return ret;
 }
 
 void Settings::LoadDistrConfigNUP()
 {
-	LOG_1("{}[Settings] [LoadDistrConfigNUP]");
 	// set to false, to avoid other funcions running stuff on our variables
 	Distribution::initialised = false;
+
+	// disable generic logging, if load logging is disabled
+	if (Logging::EnableLoadLog == false)
+		Logging::EnableGenericLogging = false;
+
+	// reset custom items
+	Distribution::ResetCustomItems();
+	// reset loaded rules
+	Distribution::ResetRules();
 
 	std::vector<std::string> files;
 	auto constexpr folder = R"(Data\SKSE\Plugins\)";
@@ -95,19 +208,35 @@ void Settings::LoadDistrConfigNUP()
 		if (entry.exists() && !entry.path().empty() && entry.path().extension() == ".ini") {
 			if (auto path = entry.path().string(); path.rfind("NUP_DIST") != std::string::npos) {
 				files.push_back(path);
-				logger::info("[Settings] [LoadDistrRules] found Distribution configuration file: {}", entry.path().filename().string());
 			}
 		}
 	}
 	if (files.empty()) {
-		logger::info("[Settings] [LoadDistrRules] No Distribution files were found");
+		loginfo("[SETTINGS] [LoadDistrRules] No Distribution files were found");
 	}
 	// init datahandler
 	auto datahandler = RE::TESDataHandler::GetSingleton();
 
+	// change order of files handled, so that files that include "default" are loaded first, so other rules may override them
+	int defind = 0;
+	for (int k = 0; k < files.size(); k++) {
+		if (Utility::ToLower(files[k]).find("default") != std::string::npos) {
+			std::string tmp = files[defind];
+			files[defind] = files[k];
+			files[k] = tmp;
+			defind++;
+		}
+	}
+	for (int k = 0; k < files.size(); k++) {
+		loginfo("[SETTINGS] [LoadDistrRules] found Distribution configuration file: {}", files[k]);
+	}
+
 	// vector of splits, filename and line
 	std::vector<std::tuple<std::vector<std::string>*, std::string, std::string>> attachments;
 	std::vector<std::tuple<std::vector<std::string>*, std::string, std::string>> copyrules;
+
+	const int chancearraysize = 5;
+
 
 	// extract the rules from all files
 	for (std::string file : files) {
@@ -142,7 +271,7 @@ void Settings::LoadDistrConfigNUP()
 					int splitindex = 0;
 					// check wether we actually have a rule
 					if (splits->size() < 3) {  // why 3? Cause first two fields are RuleVersion and RuleType and we don't accept empty rules.
-						logger::warn("[Settings] [LoadDistrRules] Not a rule. file: {}, rule:\"{}\"", file, tmp);
+						logwarn("[Settings] [LoadDistrRules] Not a rule. file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						continue;
 					}
@@ -152,11 +281,11 @@ void Settings::LoadDistrConfigNUP()
 						ruleVersion = std::stoi(splits->at(splitindex));
 						splitindex++;
 					} catch (std::out_of_range&) {
-						logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"RuleVersion\". file: {}, rule:\"{}\"", file, tmp);
+						logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"RuleVersion\". file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						continue;
 					} catch (std::invalid_argument&) {
-						logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"RuleVersion\". file: {}, rule:\"{}\"", file, tmp);
+						logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"RuleVersion\". file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						continue;
 					}
@@ -166,11 +295,11 @@ void Settings::LoadDistrConfigNUP()
 						ruleType = std::stoi(splits->at(splitindex));
 						splitindex++;
 					} catch (std::out_of_range&) {
-						logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"RuleType\". file: {}, rule:\"{}\"", file, tmp);
+						logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"RuleType\". file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						continue;
 					} catch (std::invalid_argument&) {
-						logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"RuleType\". file: {}, rule:\"{}\"", file, tmp);
+						logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"RuleType\". file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						continue;
 					}
@@ -182,7 +311,7 @@ void Settings::LoadDistrConfigNUP()
 							case 1:  // distribution rule
 								{
 									if (splits->size() != 25) {
-										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 25. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 25. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										delete splits;
 										continue;
 									}
@@ -191,7 +320,7 @@ void Settings::LoadDistrConfigNUP()
 									rule->ruleVersion = ruleVersion;
 									rule->ruleType = ruleType;
 									rule->ruleName = splits->at(splitindex);
-									LOGE1_2("[Settings] [LoadDistrRules] loading rule: {}", rule->ruleName);
+									LOGLE1_2("[Settings] [LoadDistrRules] loading rule: {}", rule->ruleName);
 									splitindex++;
 									// now come the rule priority
 									rule->rulePriority = -1;
@@ -199,12 +328,12 @@ void Settings::LoadDistrConfigNUP()
 										rule->rulePriority = std::stoi(splits->at(splitindex));
 										splitindex++;
 									} catch (std::out_of_range&) {
-										logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"RulePrio\". file: {}, rule:\"{}\"", file, tmp);
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"RulePrio\". file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									} catch (std::invalid_argument&) {
-										logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"RulePrio\". file: {}, rule:\"{}\"", file, tmp);
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"RulePrio\". file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
@@ -215,48 +344,48 @@ void Settings::LoadDistrConfigNUP()
 										rule->maxPotions = std::stoi(splits->at(splitindex));
 										splitindex++;
 									} catch (std::out_of_range&) {
-										logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"MaxPotions\". file: {}, rule:\"{}\"", file, tmp);
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"MaxPotions\". file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									} catch (std::invalid_argument&) {
-										logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"MaxPotions\". file: {}, rule:\"{}\"", file, tmp);
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"MaxPotions\". file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									}
 									// now comes Potion1Chance
-									rule->potion1Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
+									rule->potion1Chance = Utility::ParseIntArray(splits->at(splitindex));
 									splitindex++;
-									if (rule->potion1Chance.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] fiels \"Potion1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+									if (rule->potion1Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Potion1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									}
 									// now comes Potion2Chance
-									rule->potion2Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
+									rule->potion2Chance = Utility::ParseIntArray(splits->at(splitindex));
 									splitindex++;
-									if (rule->potion2Chance.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] fiels \"Potion2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+									if (rule->potion2Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Potion2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									}
 									// now comes Potion3Chance
-									rule->potion3Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
+									rule->potion3Chance = Utility::ParseIntArray(splits->at(splitindex));
 									splitindex++;
-									if (rule->potion3Chance.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] fiels \"Potion3Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+									if (rule->potion3Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Potion3Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									}
 									// now comes PotionAddChance
-									rule->potionAdditionalChance = UtilityAlch::ParseIntArray(splits->at(splitindex));
+									rule->potionAdditionalChance = Utility::ParseIntArray(splits->at(splitindex));
 									splitindex++;
-									if (rule->potionAdditionalChance.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] fiels \"PotionAddChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+									if (rule->potionAdditionalChance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"PotionAddChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
@@ -267,30 +396,30 @@ void Settings::LoadDistrConfigNUP()
 										rule->potionTierAdjust = std::stoi(splits->at(splitindex));
 										splitindex++;
 									} catch (std::out_of_range&) {
-										logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"PotionsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"PotionsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									} catch (std::invalid_argument&) {
-										logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"PotionsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"PotionsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									}
 									// now comes Fortify1Chance
-									rule->fortify1Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
+									rule->fortify1Chance = Utility::ParseIntArray(splits->at(splitindex));
 									splitindex++;
-									if (rule->fortify1Chance.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] fiels \"Fortify1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+									if (rule->fortify1Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Fortify1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									}
 									// now comes Fortify2Chance
-									rule->fortify2Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
+									rule->fortify2Chance = Utility::ParseIntArray(splits->at(splitindex));
 									splitindex++;
-									if (rule->fortify2Chance.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] fiels \"Fortify2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+									if (rule->fortify2Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Fortify2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
@@ -301,48 +430,48 @@ void Settings::LoadDistrConfigNUP()
 										rule->maxPoisons = std::stoi(splits->at(splitindex));
 										splitindex++;
 									} catch (std::out_of_range&) {
-										logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"MaxPoisons\". file: {}, rule:\"{}\"", file, tmp);
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"MaxPoisons\". file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									} catch (std::invalid_argument&) {
-										logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"MaxPoisons\". file: {}, rule:\"{}\"", file, tmp);
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"MaxPoisons\". file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									}
 									// now comes Poison1Chance
-									rule->poison1Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
+									rule->poison1Chance = Utility::ParseIntArray(splits->at(splitindex));
 									splitindex++;
-									if (rule->poison1Chance.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] fiels \"Poison1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+									if (rule->poison1Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Poison1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									}
 									// now comes Poison2Chance
-									rule->poison2Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
+									rule->poison2Chance = Utility::ParseIntArray(splits->at(splitindex));
 									splitindex++;
-									if (rule->poison2Chance.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] fiels \"Poison2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+									if (rule->poison2Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Poison2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									}
 									// now comes Poison3Chance
-									rule->poison3Chance = UtilityAlch::ParseIntArray(splits->at(splitindex));
+									rule->poison3Chance = Utility::ParseIntArray(splits->at(splitindex));
 									splitindex++;
-									if (rule->poison3Chance.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] fiels \"Poison3Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+									if (rule->poison3Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Poison3Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									}
 									// now comes PoisonAddChance
-									rule->poisonAdditionalChance = UtilityAlch::ParseIntArray(splits->at(splitindex));
+									rule->poisonAdditionalChance = Utility::ParseIntArray(splits->at(splitindex));
 									splitindex++;
-									if (rule->poisonAdditionalChance.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] fiels \"PoisonAddChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+									if (rule->poisonAdditionalChance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"PoisonAddChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
@@ -353,22 +482,22 @@ void Settings::LoadDistrConfigNUP()
 										rule->poisonTierAdjust = std::stoi(splits->at(splitindex));
 										splitindex++;
 									} catch (std::out_of_range&) {
-										logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"PoisonsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"PoisonsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									} catch (std::invalid_argument&) {
-										logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"PoisonsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"PoisonsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
 									}
 
 									// now comes FoodChance
-									rule->foodChance = UtilityAlch::ParseIntArray(splits->at(splitindex));
+									rule->foodChance = Utility::ParseIntArray(splits->at(splitindex));
 									splitindex++;
-									if (rule->foodChance.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] fiels \"FoodChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+									if (rule->foodChance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"FoodChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
 										delete splits;
 										delete rule;
 										continue;
@@ -395,34 +524,35 @@ void Settings::LoadDistrConfigNUP()
 									bool error = false;
 
 									// parse the associated objects
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> objects = UtilityAlch::ParseAssocObjects(rule->assocObjects, error, file, line);
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> objects = Utility::ParseAssocObjects(rule->assocObjects, error, file, tmp, total);
 
 									// parse the item properties
-									std::vector<std::tuple<uint64_t, float>> potioneffects = UtilityAlch::ParseAlchemyEffects(rule->potionProperties, error);
-									rule->potionDistr = UtilityAlch::GetDistribution(potioneffects, RandomRange);
-									rule->potionDistrChance = UtilityAlch::GetDistribution(potioneffects, RandomRange, true);
-									LOGE2_2("[Settings] [LoadDistrRules] rule {} contains {} potion effects", rule->ruleName, rule->potionDistr.size());
-									rule->validPotions = UtilityAlch::SumAlchemyEffects(rule->potionDistr, true);
-									std::vector<std::tuple<uint64_t, float>> poisoneffects = UtilityAlch::ParseAlchemyEffects(rule->poisonProperties, error);
-									rule->poisonDistr = UtilityAlch::GetDistribution(poisoneffects, RandomRange);
-									rule->poisonDistrChance = UtilityAlch::GetDistribution(poisoneffects, RandomRange, true);
-									LOGE2_2("[Settings] [LoadDistrRules] rule {} contains {} poison effects", rule->ruleName, rule->poisonDistr.size());
-									rule->validPoisons = UtilityAlch::SumAlchemyEffects(rule->poisonDistr, true);
-									std::vector<std::tuple<uint64_t, float>> fortifyeffects = UtilityAlch::ParseAlchemyEffects(rule->fortifyproperties, error);
-									rule->fortifyDistr = UtilityAlch::GetDistribution(fortifyeffects, RandomRange);
-									rule->fortifyDistrChance = UtilityAlch::GetDistribution(fortifyeffects, RandomRange, true);
-									LOGE2_2("[Settings] [LoadDistrRules] rule {} contains {} fortify potion effects", rule->ruleName, rule->fortifyDistr.size());
-									rule->validFortifyPotions = UtilityAlch::SumAlchemyEffects(rule->fortifyDistr, true);
-									std::vector<std::tuple<uint64_t, float>> foodeffects = UtilityAlch::ParseAlchemyEffects(rule->foodProperties, error);
-									rule->foodDistr = UtilityAlch::GetDistribution(foodeffects, RandomRange);
-									rule->foodDistrChance = UtilityAlch::GetDistribution(foodeffects, RandomRange, true);
-									LOGE2_2("[Settings] [LoadDistrRules] rule {} contains {} food effects", rule->ruleName, rule->foodDistr.size());
-									rule->validFood = UtilityAlch::SumAlchemyEffects(rule->foodDistr, true);
+									std::vector<std::tuple<AlchemicEffect, float>> potioneffects = Utility::ParseAlchemyEffects(rule->potionProperties, error);
+									rule->potionDistr = Utility::GetDistribution(potioneffects, RandomRange);
+									rule->potionDistrChance = Utility::GetDistribution(potioneffects, RandomRange, true);
+									LOGLE2_2("[Settings] [LoadDistrRules] rule {} contains {} potion effects", rule->ruleName, rule->potionDistr.size());
+									rule->validPotions = Utility::SumAlchemyEffects(rule->potionDistr, true);
+									std::vector<std::tuple<AlchemicEffect, float>> poisoneffects = Utility::ParseAlchemyEffects(rule->poisonProperties, error);
+									rule->poisonDistr = Utility::GetDistribution(poisoneffects, RandomRange);
+									rule->poisonDistrChance = Utility::GetDistribution(poisoneffects, RandomRange, true);
+									LOGLE2_2("[Settings] [LoadDistrRules] rule {} contains {} poison effects", rule->ruleName, rule->poisonDistr.size());
+									rule->validPoisons = Utility::SumAlchemyEffects(rule->poisonDistr, true);
+									std::vector<std::tuple<AlchemicEffect, float>> fortifyeffects = Utility::ParseAlchemyEffects(rule->fortifyproperties, error);
+									rule->fortifyDistr = Utility::GetDistribution(fortifyeffects, RandomRange);
+									rule->fortifyDistrChance = Utility::GetDistribution(fortifyeffects, RandomRange, true);
+									LOGLE2_2("[Settings] [LoadDistrRules] rule {} contains {} fortify potion effects", rule->ruleName, rule->fortifyDistr.size());
+									rule->validFortifyPotions = Utility::SumAlchemyEffects(rule->fortifyDistr, true);
+									std::vector<std::tuple<AlchemicEffect, float>> foodeffects = Utility::ParseAlchemyEffects(rule->foodProperties, error);
+									rule->foodDistr = Utility::GetDistribution(foodeffects, RandomRange);
+									rule->foodDistrChance = Utility::GetDistribution(foodeffects, RandomRange, true);
+									LOGLE2_2("[Settings] [LoadDistrRules] rule {} contains {} food effects", rule->ruleName, rule->foodDistr.size());
+									rule->validFood = Utility::SumAlchemyEffects(rule->foodDistr, true);
 
 									std::pair<int, Distribution::Rule*> tmptuple = { rule->rulePriority, rule };
 
 									// assign rules to search parameters
-									LOGE2_2("[Settings] [LoadDistrRules] rule {} contains {} associated objects", rule->ruleName, objects.size());
+									LOGLE2_2("[Settings] [LoadDistrRules] rule {} contains {} associated objects", rule->ruleName, objects.size());
 									for (int i = 0; i < objects.size(); i++) {
 										switch (std::get<0>(objects[i])) {
 										case Distribution::AssocType::kFaction:
@@ -454,7 +584,7 @@ void Settings::LoadDistrConfigNUP()
 																				 rule->rulePriority > Distribution::defaultRule->rulePriority))
 										Distribution::defaultRule = rule;
 									delete splits;
-									LOGE1_2("[Settings] [LoadDistrRules] rule {} successfully loaded.", rule->ruleName);
+									LOGLE1_2("[Settings] [LoadDistrRules] rule {} successfully loaded.", rule->ruleName);
 								}
 								break;
 							case 2:  // distribution attachement
@@ -466,21 +596,22 @@ void Settings::LoadDistrConfigNUP()
 							case 3:  // declare boss
 								{
 									if (splits->size() != 3) {
-										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										continue;
 									}
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
 									for (int i = 0; i < items.size(); i++) {
-										if (std::get<0>(items[i]) == Distribution::AssocType::kActor ||
-											std::get<0>(items[i]) == Distribution::AssocType::kNPC ||
-											std::get<0>(items[i]) == Distribution::AssocType::kFaction ||
-											std::get<0>(items[i]) == Distribution::AssocType::kKeyword ||
-											std::get<0>(items[i]) == Distribution::AssocType::kRace) {
+										if (std::get<0>(items[i]) & Distribution::AssocType::kActor ||
+											std::get<0>(items[i]) & Distribution::AssocType::kNPC ||
+											std::get<0>(items[i]) & Distribution::AssocType::kFaction ||
+											std::get<0>(items[i]) & Distribution::AssocType::kKeyword ||
+											std::get<0>(items[i]) & Distribution::AssocType::kRace) {
 											Distribution::_bosses.insert(std::get<1>(items[i]));
-											LOGE1_2("[Settings] [LoadDistrRules] declared {} as boss.", UtilityAlch::GetHex(std::get<1>(items[i])));
+											LOGLE1_2("[Settings] [LoadDistrRules] declared {} as boss.", Utility::GetHex(std::get<1>(items[i])));
 										}
 									}
 									// since we are done delete splits
@@ -490,13 +621,14 @@ void Settings::LoadDistrConfigNUP()
 							case 4:  // exclude object
 								{
 									if (splits->size() != 3) {
-										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										continue;
 									}
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
 									for (int i = 0; i < items.size(); i++) {
 										switch (std::get<0>(items[i])) {
 										case Distribution::AssocType::kActor:
@@ -512,18 +644,18 @@ void Settings::LoadDistrConfigNUP()
 											Distribution::_excludedItems.insert(std::get<1>(items[i]));
 											break;
 										}
-										if (AlchExtSettings::EnableLog) {
-											if (std::get<0>(items[i]) == Distribution::AssocType::kActor ||
-												std::get<0>(items[i]) == Distribution::AssocType::kNPC) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded actor {} from distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
-											} else if (std::get<0>(items[i]) == Distribution::AssocType::kFaction) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded faction {} from distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
-											} else if (std::get<0>(items[i]) == Distribution::AssocType::kKeyword) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded keyword {} from distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
-											} else if (std::get<0>(items[i]) == Distribution::AssocType::kItem) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded item {} from distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
-											} else if (std::get<0>(items[i]) == Distribution::AssocType::kRace) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded race {} from distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
+										if (Logging::EnableLoadLog) {
+											if (std::get<0>(items[i]) & Distribution::AssocType::kActor ||
+												std::get<0>(items[i]) & Distribution::AssocType::kNPC) {
+												LOGLE1_2("[Settings] [LoadDistrRules] excluded actor {} from distribution.", Utility::GetHex(std::get<1>(items[i])));
+											} else if (std::get<0>(items[i]) & Distribution::AssocType::kFaction) {
+												LOGLE1_2("[Settings] [LoadDistrRules] excluded faction {} from distribution.", Utility::GetHex(std::get<1>(items[i])));
+											} else if (std::get<0>(items[i]) & Distribution::AssocType::kKeyword) {
+												LOGLE1_2("[Settings] [LoadDistrRules] excluded keyword {} from distribution.", Utility::GetHex(std::get<1>(items[i])));
+											} else if (std::get<0>(items[i]) & Distribution::AssocType::kItem) {
+												LOGLE1_2("[Settings] [LoadDistrRules] excluded item {} from distribution.", Utility::GetHex(std::get<1>(items[i])));
+											} else if (std::get<0>(items[i]) & Distribution::AssocType::kRace) {
+												LOGLE1_2("[Settings] [LoadDistrRules] excluded race {} from distribution.", Utility::GetHex(std::get<1>(items[i])));
 											}
 										}
 									}
@@ -534,13 +666,14 @@ void Settings::LoadDistrConfigNUP()
 							case 5:  // exclude baseline
 								{
 									if (splits->size() != 3) {
-										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										continue;
 									}
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
 									for (int i = 0; i < items.size(); i++) {
 										switch (std::get<0>(items[i])) {
 										case Distribution::AssocType::kFaction:
@@ -550,13 +683,13 @@ void Settings::LoadDistrConfigNUP()
 											break;
 										}
 
-										if (AlchExtSettings::EnableLog) {
-											if (std::get<0>(items[i]) == Distribution::AssocType::kFaction) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded faction {} from base line distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
-											} else if (std::get<0>(items[i]) == Distribution::AssocType::kKeyword) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded keyword {} from base line distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
-											} else if (std::get<0>(items[i]) == Distribution::AssocType::kRace) {
-												LOGE1_2("[Settings] [LoadDistrRules] excluded race {} from base line distribution.", UtilityAlch::GetHex(std::get<1>(items[i])));
+										if (Logging::EnableLoadLog) {
+											if (std::get<0>(items[i]) & Distribution::AssocType::kFaction) {
+												LOGLE1_2("[Settings] [LoadDistrRules] excluded faction {} from base line distribution.", Utility::GetHex(std::get<1>(items[i])));
+											} else if (std::get<0>(items[i]) & Distribution::AssocType::kKeyword) {
+												LOGLE1_2("[Settings] [LoadDistrRules] excluded keyword {} from base line distribution.", Utility::GetHex(std::get<1>(items[i])));
+											} else if (std::get<0>(items[i]) & Distribution::AssocType::kRace) {
+												LOGLE1_2("[Settings] [LoadDistrRules] excluded race {} from base line distribution.", Utility::GetHex(std::get<1>(items[i])));
 											}
 										}
 									}
@@ -564,31 +697,47 @@ void Settings::LoadDistrConfigNUP()
 									delete splits;
 								}
 								break;
-							case 6: // copy rule
+							case 6:  // copy rule
 								{
 									copyrules.push_back({ splits, file, tmp });
 								}
 								break;
-							case 7: // whitelist rule
+							case 7:  // whitelist rule
 								{
 									if (splits->size() != 3) {
-										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										continue;
 									}
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
 									for (int i = 0; i < items.size(); i++) {
 										switch (std::get<0>(items[i])) {
 										case Distribution::AssocType::kItem:
 											Distribution::_whitelistItems.insert(std::get<1>(items[i]));
 											break;
+										case Distribution::AssocType::kNPC:
+										case Distribution::AssocType::kActor:
+										case Distribution::AssocType::kClass:
+										case Distribution::AssocType::kCombatStyle:
+										case Distribution::AssocType::kFaction:
+										case Distribution::AssocType::kKeyword:
+										case Distribution::AssocType::kRace:
+											Distribution::_whitelistNPCs.insert(std::get<1>(items[i]));
+											if (Logging::EnableLoadLog) {
+												LOGLE1_2("[Settings] [LoadDistrRules] whitelisted object {}.", Utility::GetHex(std::get<1>(items[i])));
+											}
+											break;
+										default:
+											LOGLE1_2("[Settings] [LoadDistrRules] cannot whitelist object {}.", Utility::GetHex(std::get<1>(items[i])));
+											break;
 										}
-										if (AlchExtSettings::EnableLog) {
-											if (std::get<0>(items[i]) == Distribution::AssocType::kItem) {
-												LOGE1_2("[Settings] [LoadDistrRules] whitelisted item {}.", UtilityAlch::GetHex(std::get<1>(items[i])));
-											} else if (std::get<0>(items[i]) == Distribution::AssocType::kRace) {
+										if (Logging::EnableLoadLog) {
+											if (std::get<0>(items[i]) & Distribution::AssocType::kItem) {
+												LOGLE1_2("[Settings] [LoadDistrRules] whitelisted item {}.", Utility::GetHex(std::get<1>(items[i])));
+											} else if (std::get<0>(items[i]) & Distribution::AssocType::kRace) {
 											}
 										}
 									}
@@ -596,25 +745,29 @@ void Settings::LoadDistrConfigNUP()
 									delete splits;
 								}
 								break;
-							case 8: // custom object distribution
+							case 8:  // custom object distribution
 								{
-									if (splits->size() != 4) {
-										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 4. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+									if (splits->size() != 5) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 5. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										continue;
 									}
-
+									std::string id = splits->at(splitindex);
+									splitindex++;
 									Distribution::CustomItemStorage* citems = new Distribution::CustomItemStorage();
+									citems->id = id;
 									// parse associated obj
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> assocobj = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
-									
+									bool errorcustom = false;
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> assocobj = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
+
 									// parse items associated
 									assoc = splits->at(splitindex);
 									splitindex++;
 									error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID, Chance, CustomItemFlag, Number, bool, uint64_t, uint64_t, bool>> associtm = UtilityAlch::ParseCustomObjects(assoc, error, file, tmp);
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID, int32_t, CustomItemFlag, int8_t, bool, std::vector<std::tuple<uint64_t, uint32_t, std::string>>, std::vector<std::tuple<uint64_t, uint32_t, std::string>>, bool>> associtm = Utility::ParseCustomObjects(assoc, errorcustom, file, tmp);
 									RE::TESForm* tmpf = nullptr;
 									RE::TESBoundObject* tmpb = nullptr;
 									RE::AlchemyItem* alch = nullptr;
@@ -628,56 +781,107 @@ void Settings::LoadDistrConfigNUP()
 												tmpf = RE::TESForm::LookupByID(std::get<1>(associtm[i]));
 												if (tmpf) {
 													tmpb = tmpf->As<RE::TESBoundObject>();
+													alch = tmpf->As<RE::AlchemyItem>();
 												}
+												LOGL1_3("{}[Settings] [LoadDstrRules] Flag converted: {}", static_cast<uint64_t>(std::get<3>(associtm[i])));
 												if (tmpb) {
 													if (std::get<5>(associtm[i]))
 														Distribution::_excludedItems.insert(std::get<2>(associtm[i]));
 													switch (std::get<3>(associtm[i])) {
 													case CustomItemFlag::Object:
 														{
-															citems->items.push_back({ tmpb, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]), std::get<8>(associtm[i]) });
+															LOGL_3("{}[Settings] [LoadDstrRules] Path 1");
+															CustomItem* cit = new CustomItem();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = tmpb;
+															citems->items.push_back(cit);
 														}
 														break;
 													case CustomItemFlag::DeathObject:
 														{
-															citems->death.push_back({ tmpb, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]), std::get<8>(associtm[i]) });
+															LOGL_3("{}[Settings] [LoadDstrRules] Path 2");
+
+															CustomItem* cit = new CustomItem();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = tmpb;
+															citems->death.push_back(cit);
 														}
 														break;
-													default:
-														{
-															alch = tmpf->As<RE::AlchemyItem>();
-															if (alch) {
-																switch (std::get<3>(associtm[i])) {
-																case CustomItemFlag::Food:
-																	citems->food.push_back({ alch, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]) });
-																	break;
-																case CustomItemFlag::Fortify:
-																	citems->fortify.push_back({ alch, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]) });
-																	break;
-																case CustomItemFlag::Poison:
-																	citems->poisons.push_back({ alch, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]) });
-																	break;
-																case CustomItemFlag::Potion:
-																	citems->potions.push_back({ alch, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]) });
-																	break;
-																}
-															} else {
-																// item is not an alchemy item so do not add it
-																LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an AlchemyItem.", UtilityAlch::GetHex(std::get<1>(associtm[i])));
-																//citems->items.push_back({ tmpb, std::get<2>(associtm[i]) });
-															}
+													case CustomItemFlag::Food:
+														LOGL_3("{}[Settings] [LoadDstrRules] Path 3");
+														if (alch) {
+															CustomItemAlch* cit = new CustomItemAlch();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = alch;
+															citems->food.push_back(cit);
+														}
+														break;
+													case CustomItemFlag::Fortify:
+														LOGL_3("{}[Settings] [LoadDstrRules] Path 4");
+														if (alch) {
+															CustomItemAlch* cit = new CustomItemAlch();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = alch;
+															citems->fortify.push_back(cit);
+														}
+														break;
+													case CustomItemFlag::Poison:
+														LOGL_3("{}[Settings] [LoadDstrRules] Path 5");
+														if (alch) {
+															CustomItemAlch* cit = new CustomItemAlch();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = alch;
+															citems->poisons.push_back(cit);
+														}
+														break;
+													case CustomItemFlag::Potion:
+														LOGL_3("{}[Settings] [LoadDstrRules] Path 6");
+														if (alch) {
+															CustomItemAlch* cit = new CustomItemAlch();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = alch;
+															citems->potions.push_back(cit);
 														}
 														break;
 													}
 												} else {
-													LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an TESBoundObject.", UtilityAlch::GetHex(std::get<1>(associtm[i])));
+													LOGLE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an TESBoundObject.", Utility::GetHex(std::get<1>(associtm[i])));
 												}
 											}
 											break;
 										}
 									}
-									if (citems->items.size() == 0) {
-										logger::warn("[Settings] [LoadDistrRules] rule does not contain any items. file: {}, rule:\"{}\"", file, tmp);
+									if (citems->items.size() == 0 &&
+										citems->death.size() == 0 &&
+										citems->food.size() == 0 &&
+										citems->fortify.size() == 0 &&
+										citems->poisons.size() == 0 &&
+										citems->potions.size() == 0) {
+										logwarn("[Settings] [LoadDistrRules] rule does not contain any items. file: {}, rule:\"{}\"", file, tmp);
 										delete citems;
 										continue;
 									}
@@ -696,7 +900,7 @@ void Settings::LoadDistrConfigNUP()
 											citems->assocobjects.insert(std::get<1>(assocobj[i]));
 											auto iter = Distribution::_customItems.find(std::get<1>(assocobj[i]));
 											if (iter != Distribution::_customItems.end()) {
-												std::vector<Distribution::CustomItemStorage*> vec = iter->second;
+												auto vec = iter->second;
 												vec.push_back(citems);
 												Distribution::_customItems.insert_or_assign(std::get<1>(assocobj[i]), vec);
 												cx++;
@@ -705,19 +909,20 @@ void Settings::LoadDistrConfigNUP()
 												Distribution::_customItems.insert_or_assign(std::get<1>(assocobj[i]), vec);
 												cx++;
 											}
-											break;
 										}
-										if (AlchExtSettings::EnableLog) {
-											if (std::get<0>(assocobj[i]) == Distribution::AssocType::kKeyword) {
-											} else if (std::get<0>(assocobj[i]) == Distribution::AssocType::kRace) {
-											} else if (std::get<0>(assocobj[i]) == Distribution::AssocType::kFaction) {
-											} else if (std::get<0>(assocobj[i]) == Distribution::AssocType::kCombatStyle) {
-											} else if (std::get<0>(assocobj[i]) == Distribution::AssocType::kClass) {
-											} else if (std::get<0>(assocobj[i]) == Distribution::AssocType::kActor || std::get<0>(assocobj[i]) == Distribution::AssocType::kNPC) {
+										if (Logging::EnableLoadLog) {
+											if (std::get<0>(assocobj[i]) & Distribution::AssocType::kKeyword) {
+											} else if (std::get<0>(assocobj[i]) & Distribution::AssocType::kRace) {
+											} else if (std::get<0>(assocobj[i]) & Distribution::AssocType::kFaction) {
+											} else if (std::get<0>(assocobj[i]) & Distribution::AssocType::kCombatStyle) {
+											} else if (std::get<0>(assocobj[i]) & Distribution::AssocType::kClass) {
+											} else if (std::get<0>(assocobj[i]) & Distribution::AssocType::kActor ||
+													   std::get<0>(assocobj[i]) & Distribution::AssocType::kNPC) {
 											}
 										}
+										LOGL_2("{}[Settings] [LoadDistrRules] attached custom rule to specific objects");
 									}
-									if (cx == 0) {
+									if (cx == 0 && total == 0) {
 										auto iter = Distribution::_customItems.find(0x0);
 										if (iter != Distribution::_customItems.end()) {
 											std::vector<Distribution::CustomItemStorage*> vec = iter->second;
@@ -729,21 +934,811 @@ void Settings::LoadDistrConfigNUP()
 											Distribution::_customItems.insert_or_assign(0x0, vec);
 											cx++;
 										}
+										LOGL_2("{}[Settings] [LoadDistrRules] attached custom rule to everything");
 									}
 
 									// since we are done delete splits
 									delete splits;
 								}
 								break;
+							case 9:  // exclude plugin
+								{
+									if (splits->size() != 3) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string plugin = splits->at(splitindex);
+									splitindex++;
+									uint32_t index = Utility::Mods::GetPluginIndex(plugin);
+
+									if (index != 0x1) {
+										// index is a normal mod
+										Distribution::_excludedPlugins.insert(index);
+										LOGLE2_2("[Settings] [LoadDistrRules] Rule 9 excluded plugin {} with index {}", plugin, Utility::GetHex(index));
+									} else {
+										LOGLE1_2("[Settings] [LoadDistrRules] Rule 9 cannot exclude plugin {}. It is either not loaded or not present", plugin);
+									}
+									// since we are done delete splits
+									delete splits;
+								}
+								break;
+							case 10:  // set item strength
+								{
+									if (splits->size() != 4) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 4. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string strength = splits->at(splitindex);
+									splitindex++;
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
+									ItemStrength str = ItemStrength::kWeak;
+									// arse item strength
+									try {
+										str = static_cast<ItemStrength>(std::stoi(strength));
+									} catch (std::out_of_range&) {
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"ItemStrength\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									} catch (std::invalid_argument&) {
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"ItemStrength\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									} catch (std::exception&) {
+										logwarn("[Settings] [LoadDistrRules] generic expection in field \"ItemStrength\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									}
+									for (int i = 0; i < items.size(); i++) {
+										switch (std::get<0>(items[i])) {
+										case Distribution::AssocType::kItem:
+											Distribution::_itemStrengthMap.insert_or_assign(std::get<1>(items[i]), str);
+											break;
+										}
+										if (Logging::EnableLoadLog) {
+											if (std::get<0>(items[i]) & Distribution::AssocType::kItem) {
+												LOGLE1_2("[Settings] [LoadDistrRules] set item strength {}.", Utility::GetHex(std::get<1>(items[i])));
+											} else {
+												logwarn("[Settings] [LoadDistrRules] rule 10 is not applicable to object {}.", Utility::GetHex(std::get<1>(items[i])));
+											}
+										}
+									}
+
+									// since we are done delete splits
+									delete splits;
+								}
+								break;
+							case 11:  // adjust actor strength
+								{
+									if (splits->size() != 4) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 4. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string strength = splits->at(splitindex);
+									splitindex++;
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
+									int str = 0;
+									// arse item strength
+									try {
+										str = std::stoi(strength);
+									} catch (std::out_of_range&) {
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"RelativeActorStrength\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									} catch (std::invalid_argument&) {
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"RelativeActorStrength\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									} catch (std::exception&) {
+										logwarn("[Settings] [LoadDistrRules] generic expection in field \"RelativeActorStrength\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									}
+									if (str != 0) {
+										for (int i = 0; i < items.size(); i++) {
+											switch (std::get<0>(items[i])) {
+											case Distribution::AssocType::kActor:
+											case Distribution::AssocType::kNPC:
+											case Distribution::AssocType::kFaction:
+											case Distribution::AssocType::kKeyword:
+											case Distribution::AssocType::kRace:
+												Distribution::_actorStrengthMap.insert_or_assign(std::get<1>(items[i]), str);
+												break;
+											}
+											if (Logging::EnableLoadLog) {
+												if (std::get<0>(items[i]) & Distribution::AssocType::kActor ||
+													std::get<0>(items[i]) & Distribution::AssocType::kNPC ||
+													std::get<0>(items[i]) & Distribution::AssocType::kFaction ||
+													std::get<0>(items[i]) & Distribution::AssocType::kKeyword ||
+													std::get<0>(items[i]) & Distribution::AssocType::kRace) {
+													LOGLE1_2("[Settings] [LoadDistrRules] set relative actor strength {}.", Utility::GetHex(std::get<1>(items[i])));
+												} else {
+													logwarn("[Settings] [LoadDistrRules] rule 11 is not applicable to object {}.", Utility::GetHex(std::get<1>(items[i])));
+												}
+											}
+										}
+									}
+
+									// since we are done delete splits
+									delete splits;
+								}
+								break;
+							case 12:  // whitelist plugin
+								{
+									if (splits->size() != 3) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string pluginname = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									auto forms = Utility::Mods::GetFormsInPlugin<RE::AlchemyItem>(pluginname);
+									for (int i = 0; i < forms.size(); i++) {
+										Distribution::_whitelistItems.insert(forms[i]->GetFormID());
+										if (Logging::EnableLoadLog)
+											LOGLE3_2("[Settings] [LoadDistrRules] whitelisted item. id: {}, name: {}, plugin: {}.", Utility::GetHex(forms[i]->GetFormID()), forms[i]->GetName(), pluginname);
+									}
+									// since we are done delete splits
+									delete splits;
+								}
+								break;
+							case 13:  // follower detection
+								{
+									if (splits->size() != 3) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
+									for (int i = 0; i < items.size(); i++) {
+										switch (std::get<0>(items[i])) {
+										case Distribution::AssocType::kFaction:
+											Distribution::_followerFactions.insert(std::get<1>(items[i]));
+											break;
+										}
+									}
+									delete splits;
+								}
+								break;
+							case 14:  // poison dosage item based
+								{
+									// version, type, enforce, assocobjects (items), dosage or setting
+									if (splits->size() != 5) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 5. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string senforce = splits->at(splitindex);
+									splitindex++;
+									bool enforce = false;
+									try {
+										if (std::stol(senforce) == 1)
+											enforce = true;
+									} catch (std::exception&) {
+										enforce = false;
+									}
+
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									std::string sdosage = splits->at(splitindex);
+									splitindex++;
+									bool setting = false;
+									int dosage = 0;
+									if (sdosage == "setting") {
+										setting = true;
+										dosage = 1;
+									} else {
+										try {
+											dosage = std::stoi(sdosage);
+										} catch (std::exception&) {
+											logwarn("[Settings] [LoadDistrRules] expection in field \"Dosage\". file: {}, rule:\"{}\"", file, tmp);
+											delete splits;
+											continue;
+										}
+									}
+									bool error = false;
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
+									for (int i = 0; i < items.size(); i++) {
+										if (std::get<0>(items[i]) == Distribution::AssocType::kItem) {
+											Distribution::_dosageItemMap.insert_or_assign(std::get<1>(items[i]), std::tuple<bool, bool, int>{ enforce, setting, dosage });
+										}
+									}
+									delete splits;
+								}
+								break;
+							case 15:  // poison dosage effect based
+								{
+									// version, type, enforce, effect, dosage or setting
+									if (splits->size() != 5) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 5. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string senforce = splits->at(splitindex);
+									splitindex++;
+									bool enforce = false;
+									try {
+										if (std::stol(senforce) == 1)
+											enforce = true;
+									} catch (std::exception&) {
+										enforce = false;
+									}
+
+									std::string seffects = splits->at(splitindex);
+									splitindex++;
+									std::string sdosage = splits->at(splitindex);
+									splitindex++;
+									bool setting = false;
+									int dosage = 0;
+									if (sdosage == "setting") {
+										setting = true;
+										dosage = 1;
+									} else {
+										try {
+											dosage = std::stoi(sdosage);
+										} catch (std::exception&) {
+											logwarn("[Settings] [LoadDistrRules] expection in field \"Dosage\". file: {}, rule:\"{}\"", file, tmp);
+											delete splits;
+											continue;
+										}
+									}
+									bool error = false;
+									std::vector<std::tuple<AlchemicEffect, float>> effects = Utility::ParseAlchemyEffects(seffects, error);
+									for (int i = 0; i < effects.size(); i++) {
+										AlchemicEffect effect = std::get<0>(effects[i]);
+										if (effect != AlchemicEffect::kNone) {
+											Distribution::_dosageEffectMap.insert_or_assign(effect, std::tuple<bool, bool, int>{ enforce, setting, dosage });
+										}
+									}
+									delete splits;
+								}
+								break;
+							case 16:  // exclude effect
+								{
+									if (splits->size() != 3) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string effect = splits->at(splitindex);
+									splitindex++;
+									AlchemicEffect e = 0;
+									try {
+										e = effect;
+									} catch (std::exception&) {
+										logwarn("[Settings] [LoadDistrRules] expection in field \"Effect\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									}
+									if (e != AlchemicEffect::kNone) {
+										Distribution::_excludedEffects.insert(e);
+									}
+									// since we are done delete splits
+									delete splits;
+								}
+								break;
+							case 17:  // exclude plugin NPCs
+								{
+									if (splits->size() != 3) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string plugin = splits->at(splitindex);
+									splitindex++;
+									uint32_t plugindex = Utility::Mods::GetPluginIndex(plugin);
+									if (plugindex != 0x1) {
+										// valid plugin index
+										Distribution::_excludedPlugins_NPCs.insert(plugindex);
+										LOGLE1_2("[Settings] [LoadDistrRules] Rule 17 excluded plugin {}. It is either not loaded or not present", plugin);
+									} else {
+										LOGLE1_2("[Settings] [LoadDistrRules] Rule 17 cannot exclude plugin {}. It is either not loaded or not present", plugin);
+									}
+									// since we are done delete splits
+									delete splits;
+								}
+								break;
+							case 18:  // whitelist plugin NPCs
+								{
+									if (splits->size() != 3) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string plugin = splits->at(splitindex);
+									splitindex++;
+									uint32_t plugindex = Utility::Mods::GetPluginIndex(plugin);
+									if (plugindex != 0x1) {
+										// valid plugin index
+										Distribution::_whitelistNPCsPlugin.insert(plugindex);
+										LOGLE1_2("[Settings] [LoadDistrRules] Rule 18 whitelisted plugin {}. It is either not loaded or not present", plugin);
+									} else {
+										LOGLE1_2("[Settings] [LoadDistrRules] Rule 18 cannot whitelist plugin {}. It is either not loaded or not present", plugin);
+									}
+									// since we are done delete splits
+									delete splits;
+								}
+								break;
+							case 19:  // mark item as alcoholic
+								{
+									if (splits->size() != 3) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
+									for (int i = 0; i < items.size(); i++) {
+										switch (std::get<0>(items[i])) {
+										case Distribution::AssocType::kItem:
+											Distribution::_alcohol.insert(std::get<1>(items[i]));
+											LOGLE1_2("[Settings] [LoadDistrRules] marked {} as alcoholic", Utility::GetHex(std::get<1>(items[i])));
+											break;
+										}
+									}
+									// since we are done delete splits
+									delete splits;
+								}
+								break;
+							case 20:  // define alchemy effect
+								{
+									if (splits->size() != 4) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									std::string effect = splits->at(splitindex);
+									splitindex++;
+									AlchemicEffect e = 0;
+									try {
+										e = effect;
+									} catch (std::exception&) {
+										logwarn("[Settings] [LoadDistrRules] expection in field \"Effect\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									}
+									if (e != AlchemicEffect::kNone) {
+										bool error = false;
+										int total = 0;
+										auto items = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
+										for (int i = 0; i < items.size(); i++) {
+											switch (std::get<0>(items[i])) {
+											case Distribution::AssocType::kEffectSetting:
+												Distribution::_magicEffectAlchMap.insert_or_assign(std::get<1>(items[i]), e);
+												LOGLE2_2("[Settings] [LoadDistrRules] fixed {} to effect {}", Utility::GetHex(std::get<1>(items[i])), Utility::ToString(e));
+												break;
+											}
+										}
+									}
+									// since we are done delete splits
+									delete splits;
+								}
+								break;
+							case 21:  // disallow player usage of items
+								{
+									if (splits->size() != 3) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = Utility::ParseAssocObjects(assoc, error, file, tmp, total);
+									for (int i = 0; i < items.size(); i++) {
+										switch (std::get<0>(items[i])) {
+										case Distribution::AssocType::kEffectSetting:
+										case Distribution::AssocType::kItem:
+											Distribution::_excludedItemsPlayer.insert(std::get<1>(items[i]));
+											LOGLE1_2("[Settings] [LoadDistrRules] excluded {} for the player", Utility::GetHex(std::get<1>(items[i])));
+											break;
+										}
+									}
+									// since we are done delete splits
+									delete splits;
+								}
+								break;
 							default:
-								logger::warn("[Settings] [LoadDistrRules] Rule type does not exist. file: {}, rule:\"{}\"", file, tmp);
+								logwarn("[Settings] [LoadDistrRules] Rule type does not exist. file: {}, rule:\"{}\"", file, tmp);
+								delete splits;
+								break;
+							}
+						}
+						break;
+					case 2:
+						{
+							switch (ruleType) {
+							case 1:  // distribution rule
+								{
+									if (splits->size() != 33) {
+										logwarn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 33. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										delete splits;
+										continue;
+									}
+									// next entry is the rulename, so we just set it
+									Distribution::Rule* rule = new Distribution::Rule();
+									rule->ruleVersion = ruleVersion;
+									rule->ruleType = ruleType;
+									rule->ruleName = splits->at(splitindex);
+									LOGLE1_2("[Settings] [LoadDistrRules] loading rule: {}", rule->ruleName);
+									splitindex++;
+									// now come the rule priority
+									rule->rulePriority = -1;
+									try {
+										rule->rulePriority = std::stoi(splits->at(splitindex));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"RulePrio\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									} catch (std::invalid_argument&) {
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"RulePrio\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes maxPotions
+									rule->maxPotions = -1;
+									try {
+										rule->maxPotions = std::stoi(splits->at(splitindex));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"MaxPotions\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									} catch (std::invalid_argument&) {
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"MaxPotions\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Potion1Chance
+									rule->potion1Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->potion1Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Potion1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Potion2Chance
+									rule->potion2Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->potion2Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Potion2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Potion3Chance
+									rule->potion3Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->potion3Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Potion3Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Potion4Chance
+									rule->potion4Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->potion4Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Potion4Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes PotionAddChance
+									rule->potionAdditionalChance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->potionAdditionalChance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"PotionAddChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes PotionsTierAdjust
+									rule->potionTierAdjust = -1;
+									try {
+										rule->potionTierAdjust = std::stoi(splits->at(splitindex));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"PotionsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									} catch (std::invalid_argument&) {
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"PotionsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes maxFortify
+									rule->maxFortify = -1;
+									try {
+										rule->maxFortify = std::stoi(splits->at(splitindex));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"MaxFortify\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									} catch (std::invalid_argument&) {
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"MaxFortify\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Fortify1Chance
+									rule->fortify1Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->fortify1Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Fortify1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Fortify2Chance
+									rule->fortify2Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->fortify2Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Fortify2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Fortify3Chance
+									rule->fortify3Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->fortify3Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Fortify3Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Fortify4Chance
+									rule->fortify4Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->fortify4Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Fortify4Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes FortifyAddChance
+									rule->fortifyAdditionalChance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->fortifyAdditionalChance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"FortifyAddChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes FortifyTierAdjust
+									rule->fortifyTierAdjust = -1;
+									try {
+										rule->fortifyTierAdjust = std::stoi(splits->at(splitindex));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"FortifyTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									} catch (std::invalid_argument&) {
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"FortifyTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes maxPoisons
+									rule->maxPoisons = -1;
+									try {
+										rule->maxPoisons = std::stoi(splits->at(splitindex));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"MaxPoisons\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									} catch (std::invalid_argument&) {
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"MaxPoisons\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Poison1Chance
+									rule->poison1Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->poison1Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Poison1Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Poison2Chance
+									rule->poison2Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->poison2Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Poison2Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Poison3Chance
+									rule->poison3Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->poison3Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Poison3Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes Poison4Chance
+									rule->poison4Chance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->poison4Chance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"Poison4Chance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes PoisonAddChance
+									rule->poisonAdditionalChance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->poisonAdditionalChance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"PoisonAddChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+									// now comes PoisonsTierAdjust
+									rule->poisonTierAdjust = -1;
+									try {
+										rule->poisonTierAdjust = std::stoi(splits->at(splitindex));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logwarn("[Settings] [LoadDistrRules] out-of-range expection in field \"PoisonsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									} catch (std::invalid_argument&) {
+										logwarn("[Settings] [LoadDistrRules] invalid-argument expection in field \"PoisonsTierAdjust\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+
+									// now comes FoodChance
+									rule->foodChance = Utility::ParseIntArray(splits->at(splitindex));
+									splitindex++;
+									if (rule->foodChance.size() != chancearraysize) {
+										logwarn("[Settings] [LoadDistrRules] fiels \"FoodChance\" couldn't be parsed. file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										delete rule;
+										continue;
+									}
+
+									// get strings for the properties
+									rule->assocObjects = splits->at(splitindex);
+									splitindex++;
+									rule->potionProperties = splits->at(splitindex);
+									splitindex++;
+									rule->fortifyproperties = splits->at(splitindex);
+									splitindex++;
+									rule->poisonProperties = splits->at(splitindex);
+									splitindex++;
+									rule->foodProperties = splits->at(splitindex);
+									splitindex++;
+
+									if (splits->at(splitindex) == "1")
+										rule->allowMixed = true;
+									else
+										rule->allowMixed = false;
+									splitindex++;
+									if (splits->at(splitindex) == "1")
+										rule->styleScaling = true;
+									else
+										rule->styleScaling = false;
+									splitindex++;
+
+									bool error = false;
+									int total = 0;
+
+									// parse the associated objects
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> objects = Utility::ParseAssocObjects(rule->assocObjects, error, file, tmp, total);
+
+									// parse the item properties
+									std::vector<std::tuple<AlchemicEffect, float>> potioneffects = Utility::ParseAlchemyEffects(rule->potionProperties, error);
+									rule->potionDistr = Utility::GetDistribution(potioneffects, RandomRange);
+									LOG1_4("{}[Settings] [LoadDistrRules] PotionDistr:\t{}", Utility::PrintDistribution(rule->potionDistr));
+									rule->potionDistrChance = Utility::GetDistribution(potioneffects, RandomRange, true);
+									rule->potionEffectMap = Utility::UnifyEffectMap(potioneffects);
+									LOG1_4("{}[Settings] [LoadDistrRules] PotionEffMap:\t{}", Utility::PrintEffectMap(rule->potionEffectMap));
+									LOGLE2_2("[Settings] [LoadDistrRules] rule {} contains {} potion effects", rule->ruleName, rule->potionDistr.size());
+									rule->validPotions = Utility::SumAlchemyEffects(rule->potionDistr, true);
+									std::vector<std::tuple<AlchemicEffect, float>> poisoneffects = Utility::ParseAlchemyEffects(rule->poisonProperties, error);
+									rule->poisonDistr = Utility::GetDistribution(poisoneffects, RandomRange);
+									LOG1_4("{}[Settings] [LoadDistrRules] PoisonDistr:\t{}", Utility::PrintDistribution(rule->poisonDistr));
+									rule->poisonDistrChance = Utility::GetDistribution(poisoneffects, RandomRange, true);
+									rule->poisonEffectMap = Utility::UnifyEffectMap(poisoneffects);
+									LOG1_4("{}[Settings] [LoadDistrRules] PoisonEffMap:\t{}", Utility::PrintEffectMap(rule->poisonEffectMap));
+									LOGLE2_2("[Settings] [LoadDistrRules] rule {} contains {} poison effects", rule->ruleName, rule->poisonDistr.size());
+									rule->validPoisons = Utility::SumAlchemyEffects(rule->poisonDistr, true);
+									std::vector<std::tuple<AlchemicEffect, float>> fortifyeffects = Utility::ParseAlchemyEffects(rule->fortifyproperties, error);
+									rule->fortifyDistr = Utility::GetDistribution(fortifyeffects, RandomRange);
+									LOG1_4("{}[Settings] [LoadDistrRules] FortifyDistr:\t{}", Utility::PrintDistribution(rule->fortifyDistr));
+									rule->fortifyDistrChance = Utility::GetDistribution(fortifyeffects, RandomRange, true);
+									rule->fortifyEffectMap = Utility::UnifyEffectMap(fortifyeffects);
+									LOG1_4("{}[Settings] [LoadDistrRules] FortifyEffMap:\t{}", Utility::PrintEffectMap(rule->fortifyEffectMap));
+									LOGLE2_2("[Settings] [LoadDistrRules] rule {} contains {} fortify potion effects", rule->ruleName, rule->fortifyDistr.size());
+									rule->validFortifyPotions = Utility::SumAlchemyEffects(rule->fortifyDistr, true);
+									std::vector<std::tuple<AlchemicEffect, float>> foodeffects = Utility::ParseAlchemyEffects(rule->foodProperties, error);
+									rule->foodDistr = Utility::GetDistribution(foodeffects, RandomRange);
+									LOG1_4("{}[Settings] [LoadDistrRules] FoodDistr:\t{}", Utility::PrintDistribution(rule->foodDistr));
+									rule->foodDistrChance = Utility::GetDistribution(foodeffects, RandomRange, true);
+									rule->foodEffectMap = Utility::UnifyEffectMap(foodeffects);
+									LOG1_4("{}[Settings] [LoadDistrRules] FoodEffMap:\t{}", Utility::PrintEffectMap(rule->foodEffectMap));
+									LOGLE2_2("[Settings] [LoadDistrRules] rule {} contains {} food effects", rule->ruleName, rule->foodDistr.size());
+									rule->validFood = Utility::SumAlchemyEffects(rule->foodDistr, true);
+
+									std::pair<int, Distribution::Rule*> tmptuple = { rule->rulePriority, rule };
+
+									// assign rules to search parameters
+									LOGLE2_2("[Settings] [LoadDistrRules] rule {} contains {} associated objects", rule->ruleName, objects.size());
+									for (int i = 0; i < objects.size(); i++) {
+										switch (std::get<0>(objects[i])) {
+										case Distribution::AssocType::kFaction:
+										case Distribution::AssocType::kCombatStyle:
+										case Distribution::AssocType::kClass:
+										case Distribution::AssocType::kRace:
+										case Distribution::AssocType::kKeyword:
+											if (auto item = Distribution::_assocMap.find(std::get<1>(objects[i])); item != Distribution::_assocMap.end()) {
+												if (std::get<1>(item->second)->rulePriority < rule->rulePriority)
+													Distribution::_assocMap.insert_or_assign(std::get<1>(objects[i]), tmptuple);
+											} else {
+												Distribution::_assocMap.insert_or_assign(std::get<1>(objects[i]), tmptuple);
+											}
+											break;
+										case Distribution::AssocType::kNPC:
+										case Distribution::AssocType::kActor:
+											if (auto item = Distribution::_npcMap.find(std::get<1>(objects[i])); item != Distribution::_npcMap.end()) {
+												if (item->second->rulePriority < rule->rulePriority)
+													Distribution::_npcMap.insert_or_assign(std::get<1>(objects[i]), rule);
+											} else {
+												Distribution::_npcMap.insert_or_assign(std::get<1>(objects[i]), rule);
+											}
+											break;
+										}
+									}
+									// add rule to the list of rules and we are finished! probably.
+									Distribution::_rules.push_back(rule);
+									if (rule->ruleName == DefaultRuleName && (Distribution::defaultRule == nullptr ||
+																				 rule->rulePriority > Distribution::defaultRule->rulePriority))
+										Distribution::defaultRule = rule;
+									delete splits;
+									LOGLE1_2("[Settings] [LoadDistrRules] rule {} successfully loaded.", rule->ruleName);
+								}
+								break;
+							default:
+								logwarn("[Settings] [LoadDistrRules] Rule type does not exist for ruleversion 2. file: {}, rule:\"{}\"", file, tmp);
 								delete splits;
 								break;
 							}
 						}
 						break;
 					default:
-						logger::warn("[Settings] [LoadDistrRules] Rule version does not exist. file: {}, rule:\"{}\"", file, tmp);
+						logwarn("[Settings] [LoadDistrRules] Rule version does not exist. file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						break;
 					}
@@ -759,19 +1754,36 @@ void Settings::LoadDistrConfigNUP()
 
 	// create default rule if there is none
 	if (Distribution::defaultRule == nullptr) {
-		Distribution::defaultRule = new Distribution::Rule(1 /*version*/, 1 /*type*/, DefaultRuleName, INT_MIN + 1 /*rulePriority*/, true /*allowMixed*/, 5 /*maxPotions*/, std::vector<int>{ 30, 40, 50, 60, 70 } /*potion1Chance*/,
-			std::vector<int>{ 20, 30, 40, 50, 60 } /*potion2Chance*/, std::vector<int>{ 10, 20, 30, 40, 50 } /*potion3Chance*/, std::vector<int>{ 0, 10, 20, 30, 40 } /*potionAddChance*/,
-			std::vector<int>{ 30, 40, 50, 60, 70 } /*fortify1Chance*/, std::vector<int>{ 30, 40, 50, 60, 70 } /*fortify2Chance*/, 0 /*potionTierAdjust*/, 5 /*maxPoisons*/,
-			std::vector<int>{ 30, 35, 40, 45, 50 } /*poison1Chance*/, std::vector<int>{ 20, 25, 30, 35, 40 } /*poison2Chance*/, std::vector<int>{ 10, 15, 20, 25, 30 } /*poison3Chance*/,
-			std::vector<int>{ 0, 5, 10, 15, 20 } /*poisonAddChance*/, 0 /*poisonTierAdjust*/, std::vector<int>{ 70, 80, 90, 100, 100 } /*foodChance*/,
-			Distribution::GetVector(RandomRange, AlchemyEffect::kAnyPotion) /*potionDistr*/,
-			Distribution::GetVector(RandomRange, AlchemyEffect::kAnyPoison) /*poisonDistr*/,
-			Distribution::GetVector(RandomRange, AlchemyEffect::kAnyFortify) /*fortifyDistr*/,
-			Distribution::GetVector(RandomRange, AlchemyEffect::kAnyFood) /*foodDistr*/,
-			static_cast<uint64_t>(AlchemyEffect::kAnyPotion) /*validPotions*/,
-			static_cast<uint64_t>(AlchemyEffect::kAnyPoison) /*validPoisons*/,
-			static_cast<uint64_t>(AlchemyEffect::kAnyFortify) /*validFortifyPotions*/,
-			static_cast<uint64_t>(AlchemyEffect::kAnyFood) /*validFood*/);
+		Distribution::defaultRule = new Distribution::Rule(1 /*version*/, 1 /*type*/, DefaultRuleName, INT_MIN + 1 /*rulePriority*/, true /*allowMixed*/, true /*styleScaling*/, 5 /*maxPotions*/, std::vector<int>{ 30, 40, 50, 60, 70 } /*potion1Chance*/,
+			std::vector<int>{ 20, 30, 40, 50, 60 } /*potion2Chance*/, std::vector<int>{ 10, 20, 30, 40, 50 } /*potion3Chance*/, std::vector<int>{ 5, 15, 25, 35, 45 } /*potion4Chance*/, std::vector<int>{ 0, 10, 20, 30, 40 } /*potionAddChance*/, 0 /*potionTierAdjust*/,
+			5 /*maxFortify*/, std::vector<int>{ 30, 40, 50, 60, 70 } /*fortify1Chance*/, std::vector<int>{ 30, 40, 50, 60, 70 } /*fortify2Chance*/, std::vector<int>{ 20, 30, 40, 50, 60 } /*fortify3Chance*/, std::vector<int>{ 10, 20, 30, 40, 50 } /*fortify4Chance*/, std::vector<int>{ 5, 10, 15, 20, 25 } /*fortifyAddChance*/, 0 /*fortifyTierAdjust*/,
+			5 /*maxPoisons*/, std::vector<int>{ 30, 35, 40, 45, 50 } /*poison1Chance*/, std::vector<int>{ 20, 25, 30, 35, 40 } /*poison2Chance*/, std::vector<int>{ 10, 15, 20, 25, 30 } /*poison3Chance*/, std::vector<int>{ 5, 10, 15, 20, 25 } /*poison4Chance*/,
+			std::vector<int>{ 0, 5, 10, 15, 20 } /*poisonAddChance*/, 0 /*poisonTierAdjust*/,
+			std::vector<int>{ 70, 80, 90, 100, 100 } /*foodChance*/,
+			Distribution::GetVector(RandomRange, AlchemicEffect::kAnyPotion) /*potionDistr*/,
+			Distribution::GetVector(RandomRange, AlchemicEffect::kAnyPoison) /*poisonDistr*/,
+			Distribution::GetVector(RandomRange, AlchemicEffect::kAnyFortify) /*fortifyDistr*/,
+			Distribution::GetVector(RandomRange, AlchemicEffect::kAnyFood) /*foodDistr*/,
+			AlchemicEffect::kAnyPotion | AlchemicEffect::kCustom /*validPotions*/,
+			AlchemicEffect::kAnyPoison | AlchemicEffect::kCustom /*validPoisons*/,
+			AlchemicEffect::kAnyFortify | AlchemicEffect::kCustom /*validFortifyPotions*/,
+			AlchemicEffect::kAnyFood | AlchemicEffect::kCustom /*validFood*/);
+	}
+	if (Distribution::defaultCustomRule == nullptr) {
+		Distribution::defaultCustomRule = new Distribution::Rule(1 /*version*/, 1 /*type*/, DefaultRuleName, INT_MIN + 1 /*rulePriority*/, true /*allowMixed*/, true /*styleScaling*/, 5 /*maxPotions*/, std::vector<int>{ 30, 40, 50, 60, 70 } /*potion1Chance*/,
+			std::vector<int>{ 20, 30, 40, 50, 60 } /*potion2Chance*/, std::vector<int>{ 10, 20, 30, 40, 50 } /*potion3Chance*/, std::vector<int>{ 5, 15, 25, 35, 45 } /*potion4Chance*/, std::vector<int>{ 0, 10, 20, 30, 40 } /*potionAddChance*/, 0 /*potionTierAdjust*/,
+			5 /*maxFortify*/, std::vector<int>{ 30, 40, 50, 60, 70 } /*fortify1Chance*/, std::vector<int>{ 30, 40, 50, 60, 70 } /*fortify2Chance*/, std::vector<int>{ 20, 30, 40, 50, 60 } /*fortify3Chance*/, std::vector<int>{ 10, 20, 30, 40, 50 } /*fortify4Chance*/, std::vector<int>{ 5, 10, 15, 20, 25 } /*fortifyAddChance*/, 0 /*fortifyTierAdjust*/,
+			5 /*maxPoisons*/, std::vector<int>{ 30, 35, 40, 45, 50 } /*poison1Chance*/, std::vector<int>{ 20, 25, 30, 35, 40 } /*poison2Chance*/, std::vector<int>{ 10, 15, 20, 25, 30 } /*poison3Chance*/, std::vector<int>{ 5, 10, 15, 20, 25 } /*poison4Chance*/,
+			std::vector<int>{ 0, 5, 10, 15, 20 } /*poisonAddChance*/, 0 /*poisonTierAdjust*/,
+			std::vector<int>{ 70, 80, 90, 100, 100 } /*foodChance*/,
+			std::vector<std::tuple<int, AlchemicEffect>>{} /*potionDistr*/,
+			std::vector<std::tuple<int, AlchemicEffect>>{} /*poisonDistr*/,
+			std::vector<std::tuple<int, AlchemicEffect>>{} /*fortifyDistr*/,
+			std::vector<std::tuple<int, AlchemicEffect>>{} /*foodDistr*/,
+			AlchemicEffect::kCustom /*validPotions*/,
+			AlchemicEffect::kCustom /*validPoisons*/,
+			AlchemicEffect::kCustom /*validFortifyPotions*/,
+			AlchemicEffect::kCustom /*validFood*/);
 	}
 
 	if (copyrules.size() > 0) {
@@ -848,7 +1860,8 @@ void Settings::LoadDistrConfigNUP()
 
 					// parse the associated objects
 					bool error = false;
-					std::vector<std::tuple<Distribution::AssocType, RE::FormID>> objects = UtilityAlch::ParseAssocObjects((std::get<0>(a)->at(3)), error, std::get<1>(a), std::get<2>(a));
+					int total = 0;
+					std::vector<std::tuple<Distribution::AssocType, RE::FormID>> objects = Utility::ParseAssocObjects((std::get<0>(a)->at(3)), error, std::get<1>(a), std::get<2>(a), total);
 
 					std::pair<int, Distribution::Rule*> tmptuple = { prio, rule };
 					// assign rules to search parameters
@@ -884,7 +1897,7 @@ void Settings::LoadDistrConfigNUP()
 							}
 							break;
 						}
-						if (AlchExtSettings::EnableLog) {
+						if (Logging::EnableLog) {
 							switch (std::get<0>(objects[i])) {
 							case Distribution::AssocType::kFaction:
 								if (attach) {
@@ -1181,7 +2194,7 @@ void Settings::LoadDistrConfigNUP()
 
 	Distribution::initialised = true;
 
-	if (Settings::AlchExtSettings::EnableLog) {
+	if (Logging::EnableLog) {
 		logger::info("[Settings] [LoadDistrRules] Number of Rules: {}", Distribution::rules()->size());
 		logger::info("[Settings] [LoadDistrRules] Number of NPCs: {}", Distribution::npcMap()->size());
 		logger::info("[Settings] [LoadDistrRules] Buckets of NPCs: {}", Distribution::npcMap()->bucket_count());
@@ -1208,7 +2221,7 @@ void Settings::LoadDistrConfigNUP()
 	}
 }
 
-void Settings::LoadDistrConfigAlchExt()
+void Settings::LoadDistrConfig()
 {
 	LOG_1("{}[Settings] [LoadDistrConfigAlchExt]");
 	// set to false, to avoid other funcions running stuff on our variables
@@ -1342,13 +2355,14 @@ void Settings::LoadDistrConfigAlchExt()
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> assocobj = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> assocobj = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp, total);
 
 									// parse items associated
 									assoc = splits->at(splitindex);
 									splitindex++;
 									error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID, Chance, CustomItemFlag, Number, bool, uint64_t, uint64_t, bool>> associtm = UtilityAlch::ParseCustomObjects(assoc, error, file, tmp);
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID, int32_t, CustomItemFlag, int8_t, bool, std::vector<std::tuple<uint64_t, uint32_t, std::string>>, std::vector<std::tuple<uint64_t, uint32_t, std::string>>, bool>> associtm = UtilityAlch::ParseCustomObjects(assoc, error, file, tmp);
 									RE::TESForm* tmpf = nullptr;
 									RE::TESBoundObject* tmpb = nullptr;
 									RE::AlchemyItem* alch = nullptr;
@@ -1362,49 +2376,95 @@ void Settings::LoadDistrConfigAlchExt()
 												tmpf = RE::TESForm::LookupByID(std::get<1>(associtm[i]));
 												if (tmpf) {
 													tmpb = tmpf->As<RE::TESBoundObject>();
+													alch = tmpf->As<RE::AlchemyItem>();
 												}
+												LOGL1_3("{}[Settings] [LoadDstrRules] Flag converted: {}", static_cast<uint64_t>(std::get<3>(associtm[i])));
 												if (tmpb) {
 													if (std::get<5>(associtm[i]))
 														Distribution::_excludedItems.insert(std::get<2>(associtm[i]));
 													switch (std::get<3>(associtm[i])) {
 													case CustomItemFlag::Object:
 														{
-															citems->items.push_back({ tmpb, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]), std::get<8>(associtm[i]) });
+															LOGL_3("{}[Settings] [LoadDstrRules] Path 1");
+															CustomItem* cit = new CustomItem();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = tmpb;
+															citems->items.push_back(cit);
 														}
 														break;
 													case CustomItemFlag::DeathObject:
 														{
-															citems->death.push_back({ tmpb, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]), std::get<8>(associtm[i]) });
+															LOGL_3("{}[Settings] [LoadDstrRules] Path 2");
+
+															CustomItem* cit = new CustomItem();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = tmpb;
+															citems->death.push_back(cit);
 														}
 														break;
-													default:
-														{
-															alch = tmpf->As<RE::AlchemyItem>();
-															if (alch) {
-																switch (std::get<3>(associtm[i])) {
-																case CustomItemFlag::Food:
-																	citems->food.push_back({ alch, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]) });
-																	break;
-																case CustomItemFlag::Fortify:
-																	citems->fortify.push_back({ alch, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]) });
-																	break;
-																case CustomItemFlag::Poison:
-																	citems->poisons.push_back({ alch, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]) });
-																	break;
-																case CustomItemFlag::Potion:
-																	citems->potions.push_back({ alch, std::get<2>(associtm[i]), std::get<4>(associtm[i]), std::get<6>(associtm[i]), std::get<7>(associtm[i]) });
-																	break;
-																}
-															} else {
-																// item is not an alchemy item so do not add it
-																LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an AlchemyItem.", UtilityAlch::GetHex(std::get<1>(associtm[i])));
-																//citems->items.push_back({ tmpb, std::get<2>(associtm[i]) });
-															}
+													case CustomItemFlag::Food:
+														LOGL_3("{}[Settings] [LoadDstrRules] Path 3");
+														if (alch) {
+															CustomItemAlch* cit = new CustomItemAlch();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = alch;
+															citems->food.push_back(cit);
+														}
+														break;
+													case CustomItemFlag::Fortify:
+														LOGL_3("{}[Settings] [LoadDstrRules] Path 4");
+														if (alch) {
+															CustomItemAlch* cit = new CustomItemAlch();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = alch;
+															citems->fortify.push_back(cit);
+														}
+														break;
+													case CustomItemFlag::Poison:
+														LOGL_3("{}[Settings] [LoadDstrRules] Path 5");
+														if (alch) {
+															CustomItemAlch* cit = new CustomItemAlch();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = alch;
+															citems->poisons.push_back(cit);
+														}
+														break;
+													case CustomItemFlag::Potion:
+														LOGL_3("{}[Settings] [LoadDstrRules] Path 6");
+														if (alch) {
+															CustomItemAlch* cit = new CustomItemAlch();
+															cit->chance = std::get<4>(associtm[i]);
+															cit->conditionsall = std::get<6>(associtm[i]);
+															cit->conditionsany = std::get<7>(associtm[i]);
+															cit->giveonce = std::get<8>(associtm[i]);
+															cit->num = std::get<2>(associtm[i]);
+															cit->object = alch;
+															citems->potions.push_back(cit);
 														}
 														break;
 													}
 												} else {
-													LOGE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an TESBoundObject.", UtilityAlch::GetHex(std::get<1>(associtm[i])));
+													LOGLE1_2("[Settings] [LoadDistrRules] custom rule for item {} cannot be applied, due to the item not being an TESBoundObject.", Utility::GetHex(std::get<1>(associtm[i])));
 												}
 											}
 											break;
@@ -1441,7 +2501,7 @@ void Settings::LoadDistrConfigAlchExt()
 											}
 											break;
 										}
-										if (AlchExtSettings::EnableLog) {
+										if (Logging::EnableLog) {
 											if (std::get<0>(assocobj[i]) == Distribution::AssocType::kKeyword) {
 											} else if (std::get<0>(assocobj[i]) == Distribution::AssocType::kRace) {
 											} else if (std::get<0>(assocobj[i]) == Distribution::AssocType::kFaction) {
@@ -1492,7 +2552,8 @@ void Settings::LoadDistrConfigAlchExt()
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp, total);
 									for (int i = 0; i < items.size(); i++) {
 										switch (std::get<0>(items[i])) {
 										case Distribution::AssocType::kActor:
@@ -1511,9 +2572,9 @@ void Settings::LoadDistrConfigAlchExt()
 														itr->second->push_back(disease);
 													} else  // vector not valid
 													{
-														std::vector<Diseases::Disease>* vec = new std::vector<Diseases::Disease>;
+														std::unique_ptr<std::vector<Diseases::Disease>> vec = std::make_unique<std::vector<Diseases::Disease>>();
 														vec->push_back(disease);
-														data->diseasesAssoc.insert_or_assign(std::get<1>(items[i]), vec);
+														data->diseasesAssoc.insert_or_assign(std::get<1>(items[i]), std::move(vec));
 													}
 												}
 											}
@@ -1546,7 +2607,8 @@ void Settings::LoadDistrConfigAlchExt()
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp, total);
 									for (int i = 0; i < items.size(); i++) {
 										switch (std::get<0>(items[i])) {
 										case Distribution::AssocType::kCell:
@@ -1586,7 +2648,8 @@ void Settings::LoadDistrConfigAlchExt()
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp, total);
 									for (int i = 0; i < items.size(); i++) {
 										switch (std::get<0>(items[i])) {
 										case Distribution::AssocType::kWeather:
@@ -1626,7 +2689,8 @@ void Settings::LoadDistrConfigAlchExt()
 									std::string assoc = splits->at(splitindex);
 									splitindex++;
 									bool error = false;
-									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp);
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp, total);
 									for (int i = 0; i < items.size(); i++) {
 										switch (std::get<0>(items[i])) {
 										case Distribution::AssocType::kTextureSet:
@@ -1668,128 +2732,422 @@ void Settings::LoadDistrConfigAlchExt()
 	LoadGameObjects();
 
 
-	if (Settings::AlchExtSettings::EnableLog) {
+	if (Logging::EnableLog) {
 		//logger::info("[Settings] [LoadDistrRulesAlchExt] Number of Rules: {}", Distribution::rules()->size());
 	}
 }
 
-static bool IsLeveledChar(RE::TESNPC* npc)
+void Settings::ApplySkillBoostPerks()
 {
-	if (npc->baseTemplateForm == nullptr)
-		return true;
-	RE::TESNPC* tplt = npc->baseTemplateForm->As<RE::TESNPC>();
-	RE::TESLevCharacter* lvl = npc->baseTemplateForm->As<RE::TESLevCharacter>();
-	if (tplt) {
-		return IsLeveledChar(tplt);
-	} else if (lvl)
-		return false;
-	else
-		;  //logger::info("template invalid");
-	return false;
+	auto races = CalcRacesWithoutPotionSlot();
+	auto datahandler = RE::TESDataHandler::GetSingleton();
+	auto npcs = datahandler->GetFormArray<RE::TESNPC>();
+	for (auto& npc : npcs) {
+		// make sure it isn't the player, isn't excluded, and the race isn't excluded from the perks
+		if (npc && npc->GetFormID() != 0x7 && npc->GetRace() && !Distribution::ExcludedNPC(npc) && races.contains(npc->GetRace()->GetFormID()) == false) {
+			// some creatures have cause CTDs or other problems, if they get the perks, so try to filter some of them out
+			// if they are a creature and do not have any explicit rule, they will not get any perks
+			// at the same time, their id will be blacklisted for the rest of the plugin, to avoid any handling and distribution problems
+			if (Settings::NUPSettings::Compatibility::_DisableCreaturesWithoutRules && (npc->GetRace()->HasKeyword(Settings::GameObj::ActorTypeCreature) || npc->GetRace()->HasKeyword(GameObj::ActorTypeAnimal))) {
+				ActorStrength acs;
+				ItemStrength is;
+				auto tplt = Utility::ExtractTemplateInfo(npc);
+				auto rule = Distribution::CalcRule(npc, acs, is, &tplt);
+				if (rule->ruleName == Distribution::emptyRule->ruleName || rule->ruleName == Distribution::defaultRule->ruleName) {
+					// blacklist the npc
+					Distribution::_excludedNPCs.insert(npc->GetFormID());
+					logwarn("[Settings] [AddPerks] Excluded creature {}", Utility::PrintForm(npc));
+					// handle next npc
+					continue;
+				}
+			}
+			npc->AddPerk(Settings::GameObj::AlchemySkillBoosts, 1);
+			npc->AddPerk(Settings::GameObj::PerkSkillBoosts, 1);
+			LOGL1_4("{}[Settings] [AddPerks] Added perks to npc {}", Utility::PrintForm(npc));
+		}
+	}
 }
 
-Distribution::NPCTPLTInfo Distribution::ExtractTemplateInfo(RE::TESLevCharacter* lvl)
+void Settings::ClassifyItems()
 {
-	if (lvl == nullptr)
-		return Distribution::NPCTPLTInfo{};
-	// just try to grab the first entry of the leveled list, since they should all share
-	// factions 'n stuff
-	if (lvl->entries.size() > 0) {
-		RE::TESForm* entry = lvl->entries[0].form;
-		RE::TESNPC* tplt = entry->As<RE::TESNPC>();
-		RE::TESLevCharacter* lev = entry->As<RE::TESLevCharacter>();
-		if (tplt)
-			return ExtractTemplateInfo(tplt);
-		else if (lev)
-			return ExtractTemplateInfo(lev);
-		else
-			;  //logger::info("template invalid");
+	// resetting all items
+	_itemsInit = false;
+
+	_potionsWeak_main.clear();
+	_potionsWeak_rest.clear();
+	_potionsStandard_main.clear();
+	_potionsStandard_rest.clear();
+	_potionsPotent_main.clear();
+	_potionsPotent_rest.clear();
+	_potionsInsane_main.clear();
+	_potionsInsane_rest.clear();
+	_potionsBlood.clear();
+	_poisonsWeak.clear();
+	_poisonsStandard.clear();
+	_poisonsPotent.clear();
+	_poisonsInsane.clear();
+	_foodall.clear();
+
+	Data* data = Data::GetSingleton();
+	data->ResetAlchItemEffects();
+	Comp* comp = Comp::GetSingleton();
+
+	std::vector<std::tuple<std::string, std::string>> ingredienteffectmap;
+
+	// start sorting items
+
+	auto begin = std::chrono::steady_clock::now();
+	const auto& [hashtable, lock] = RE::TESForm::GetAllForms();
+	{
+		const RE::BSReadLockGuard locker{ lock };
+		if (hashtable) {
+			RE::AlchemyItem* item = nullptr;
+			RE::IngredientItem* itemi = nullptr;
+			for (auto& [id, form] : *hashtable) {
+				if (form && form->IsMagicItem()) {
+					item = form->As<RE::AlchemyItem>();
+					if (item) {
+						LOGL1_4("{}[Settings] [ClassifyItems] Found AlchemyItem {}", Utility::PrintForm(item));
+						// unnamed items cannot appear in anyones inventory normally so son't add them to our lists
+						if (item->GetName() == nullptr || item->GetName() == (const char*)"" || strlen(item->GetName()) == 0 ||
+							std::string(item->GetName()).find(std::string("Dummy")) != std::string::npos ||
+							std::string(item->GetName()).find(std::string("dummy")) != std::string::npos) {
+							continue;
+						}
+						// check whether item is excluded, or whether it is not whitelisted when in whitelist mode
+						// if it is excluded and whitelisted it is still excluded
+						if (Distribution::excludedItems()->contains(item->GetFormID()) ||
+							Settings::NUPSettings::Whitelist::EnabledItems &&
+								!Distribution::whitelistItems()->contains(item->GetFormID())) {
+							continue;
+						}
+						// check whether the plugin is excluded
+						if (Distribution::excludedPlugins()->contains(Utility::Mods::GetPluginIndex(item)) == true) {
+							continue;
+						}
+
+						auto clas = ClassifyItem(item);
+
+						// there is a little bit of a problem for some items that have wrong flags and no keywords set. Try to detect them by sound and set the flags
+						if (item->IsFood() == false && item->IsMedicine() == false && item->IsPoison() == false && item->HasKeyword(Settings::GameObj::VendorItemFood) == false && item->HasKeyword(Settings::GameObj::VendorItemFoodRaw) == false && item->HasKeyword(Settings::GameObj::VendorItemPoison) == false && item->HasKeyword(Settings::GameObj::VendorItemPotion) == false) {
+							if (item->data.consumptionSound == Settings::GameObj::FoodEat) {
+								item->data.flags = RE::AlchemyItem::AlchemyFlag::kFoodItem | item->data.flags;
+								//} else if (item->data.consumptionSound == Settings::PoisonUse) {
+								//	item->data.flags = RE::AlchemyItem::AlchemyFlag::kPoison | item->data.flags;
+							} else if (item->data.consumptionSound == Settings::GameObj::PotionUse) {
+								item->data.flags = RE::AlchemyItem::AlchemyFlag::kMedicine | item->data.flags;
+							}
+						}
+						// set medicine flag for those who need it
+						if (item->IsFood() == false && item->IsPoison() == false) {  //  && item->IsMedicine() == false
+							item->data.flags = RE::AlchemyItem::AlchemyFlag::kMedicine | item->data.flags;
+							if (Logging::EnableLoadLog && Logging::LogLevel >= 4) {
+								//LOGLE1_1("Item: {}", Utility::PrintForm(item));
+								if (item->data.flags & RE::AlchemyItem::AlchemyFlag::kCostOverride)
+									LOGLE_1("\tFlag: CostOverride");
+								if (item->data.flags & RE::AlchemyItem::AlchemyFlag::kFoodItem)
+									LOGLE_1("\tFlag: FoodItem");
+								if (item->data.flags & RE::AlchemyItem::AlchemyFlag::kExtendDuration)
+									LOGLE_1("\tFlag: ExtendedDuration");
+								if (item->data.flags & RE::AlchemyItem::AlchemyFlag::kMedicine)
+									LOGLE_1("\tFlag: Medicine");
+								if (item->data.flags & RE::AlchemyItem::AlchemyFlag::kPoison)
+									LOGLE_1("\tFlag: Poison");
+							}
+							//LOGLE1_1("[Settings] [ClassifyItems] [AssignPotionFlag] {}", Utility::PrintForm(item));
+						}
+						// exclude item, if it has an alchemy effect that has been excluded
+						AlchemicEffect effects = std::get<0>(clas);
+						auto itr = Distribution::excludedEffects()->begin();
+						while (itr != Distribution::excludedEffects()->end()) {
+							if ((effects & *itr).IsValid()) {
+								Distribution::_excludedItems.insert(item->GetFormID());
+							}
+							itr++;
+						}
+						if (Distribution::excludedItems()->contains(item->GetFormID())) {
+							continue;
+						}
+
+						// if the item has the ReflectDamage effect, with a strength of more than 50%, remove the item
+						if ((std::get<0>(clas) & AlchemicEffect::kReflectDamage).IsValid()) {
+							for (int i = 0; i < (int)item->effects.size(); i++) {
+								if (item->effects[i]->baseEffect &&
+									((ConvertToAlchemyEffectPrimary(item->effects[i]->baseEffect) == AlchemicEffect::kReflectDamage) ||
+										(item->effects[i]->baseEffect->data.archetype == RE::EffectArchetypes::ArchetypeID::kDualValueModifier && (ConvertToAlchemyEffectSecondary(item->effects[i]->baseEffect) == AlchemicEffect::kReflectDamage)))) {
+									if (item->effects[i]->effectItem.magnitude > 50) {
+										Distribution::_excludedItems.insert(item->GetFormID());
+										LOGLE1_1("[Settings] [ClassifyItems] Excluded {} due to strong ReflectDamage effect", Utility::PrintForm(item));
+										continue;
+									}
+								}
+							}
+						}
+
+						// check if item has known alcohol keywords and add it to list of alcohol
+						if (comp->LoadedCACO() && item->HasKeyword(comp->CACO_VendorItemDrinkAlcohol) || comp->LoadedApothecary() && item->HasKeyword(comp->Apot_SH_AlcoholDrinkKeyword)) {
+							Distribution::_alcohol.insert(item->GetFormID());
+						}
+
+						// check for player excluded magiceffects
+						for (int i = 0; i < (int)item->effects.size(); i++) {
+							if (item->effects[i]->baseEffect && Distribution::excludedItemsPlayer()->contains(item->effects[i]->baseEffect->GetFormID())) {
+								LOGLE1_1("[Settings] [ClassifyItems] Excluded {} for player due to effect", Utility::PrintForm(item));
+								Distribution::_excludedItemsPlayer.insert(item->GetFormID());
+							}
+						}
+
+						// since the item is not to be excluded, save which alchemic effects are present
+						_alchemyEffectsFound |= std::get<0>(clas);
+
+						RE::Actor* player = RE::PlayerCharacter::GetSingleton();
+
+						// if the value of the item is less than zero, we should not insert them into the distribution lists, since they are likely to be broken
+						// or test/dummy items
+						if (item->CalculateTotalGoldValue(player)) {
+							// determine the type of item
+							if (std::get<2>(clas) == ItemType::kFood &&
+								(Settings::NUPSettings::Food::_AllowDetrimentalEffects || std::get<5>(clas) == false /*either we allow detrimental effects or there are none*/)) {
+								_foodall.insert(_foodall.end(), { std::get<0>(clas), item });
+								_foodEffectsFound |= std::get<0>(clas);
+							} else if (std::get<2>(clas) == ItemType::kPoison &&
+									   (Settings::NUPSettings::Poisons::_AllowPositiveEffects || std::get<5>(clas) == false /*either we allow positive effects or there are none*/)) {
+								switch (std::get<1>(clas)) {
+								case ItemStrength::kWeak:
+									_poisonsWeak.insert(_poisonsWeak.end(), { std::get<0>(clas), item });
+									break;
+								case ItemStrength::kStandard:
+									_poisonsStandard.insert(_poisonsStandard.end(), { std::get<0>(clas), item });
+									break;
+								case ItemStrength::kPotent:
+									_poisonsPotent.insert(_poisonsPotent.end(), { std::get<0>(clas), item });
+									break;
+								case ItemStrength::kInsane:
+									_poisonsInsane.insert(_poisonsInsane.end(), { std::get<0>(clas), item });
+									break;
+								}
+								_poisonEffectsFound |= std::get<0>(clas);
+							} else if (std::get<2>(clas) == ItemType::kPotion &&
+									   (Settings::NUPSettings::Potions::_AllowDetrimentalEffects || std::get<5>(clas) == false /*either we allow detrimental effects or there are none*/)) {
+								if ((std::get<0>(clas) & AlchemicEffect::kBlood) > 0)
+									_potionsBlood.insert(_potionsBlood.end(), { std::get<0>(clas), item });
+								else if ((std::get<0>(clas) & AlchemicEffect::kHealth) > 0 ||
+										 (std::get<0>(clas) & AlchemicEffect::kMagicka) > 0 ||
+										 (std::get<0>(clas) & AlchemicEffect::kStamina) > 0) {
+									switch (std::get<1>(clas)) {
+									case ItemStrength::kWeak:
+										_potionsWeak_main.insert(_potionsWeak_main.end(), { std::get<0>(clas), item });
+										break;
+									case ItemStrength::kStandard:
+										_potionsStandard_main.insert(_potionsStandard_main.end(), { std::get<0>(clas), item });
+										break;
+									case ItemStrength::kPotent:
+										_potionsPotent_main.insert(_potionsPotent_main.end(), { std::get<0>(clas), item });
+										break;
+									case ItemStrength::kInsane:
+										_potionsInsane_main.insert(_potionsPotent_main.end(), { std::get<0>(clas), item });
+										break;
+									}
+								} else if (std::get<0>(clas) != AlchemicEffect::kNone) {
+									switch (std::get<1>(clas)) {
+									case ItemStrength::kWeak:
+										_potionsWeak_rest.insert(_potionsWeak_rest.end(), { std::get<0>(clas), item });
+										break;
+									case ItemStrength::kStandard:
+										_potionsStandard_rest.insert(_potionsStandard_rest.end(), { std::get<0>(clas), item });
+										break;
+									case ItemStrength::kPotent:
+										_potionsPotent_rest.insert(_potionsPotent_rest.end(), { std::get<0>(clas), item });
+										break;
+									case ItemStrength::kInsane:
+										_potionsInsane_rest.insert(_potionsInsane_rest.end(), { std::get<0>(clas), item });
+										break;
+									}
+								}
+								_potionEffectsFound |= std::get<0>(clas);
+							}
+						} else {
+							LOGLE1_1("[Settings] [ClassifyItems] Item {} has value 0 and will not be distributed", Utility::PrintForm(item));
+						}
+						int dosage = 0;
+						if (item->IsPoison())
+							dosage = Distribution::GetPoisonDosage(item, std::get<0>(clas));
+						// add item into effect map
+						data->SetAlchItemEffects(item->GetFormID(), std::get<0>(clas), std::get<3>(clas), std::get<4>(clas), std::get<5>(clas), dosage);
+						LOGLE4_1("[Settings] [ClassifyItems] Saved effects for {} dur {} mag {} effect {}", Utility::PrintForm(item), std::get<3>(clas), std::get<4>(clas), std::get<0>(clas).string());
+					}
+
+					itemi = form->As<RE::IngredientItem>();
+					if (itemi) {
+						LOGL1_4("{}[Settings] [ClassifyItems] Found IngredientItem {}", Utility::PrintForm(itemi));
+						for (int i = 0; i < (int)itemi->effects.size(); i++) {
+							auto sett = itemi->effects[i]->baseEffect;
+							// just retrieve the effects, we will analyze them later
+							if (sett) {
+								ingredienteffectmap.push_back({ itemi->GetName(), Utility::ToString(ConvertToAlchemyEffectPrimary(sett)) });
+
+								// the effects of ingredients may lead to valid potions being brewed, so we need to save that these effects actually exist in the game
+								_alchemyEffectsFound |= ConvertToAlchemyEffectPrimary(sett);
+							}
+						}
+					}
+				}
+			}
+		}
 	}
-	return Distribution::NPCTPLTInfo{};
+	PROF1_1("{}[ClassifyItems] execution time: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()));
+
+	// add alcoholic items to player exclusion list
+	if (Settings::NUPSettings::Player::_DontDrinkAlcohol) {
+		auto itr = Distribution::_alcohol.begin();
+		while (itr != Distribution::_alcohol.end()) {
+			Distribution::_excludedItemsPlayer.insert(*itr);
+			itr++;
+		}
+	}
+
+	// items initialised
+	_itemsInit = true;
+
+	LOGL1_1("{}[Settings] [ClassifyItems] _potionsWeak_main {}", potionsWeak_main()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _potionsWeak_rest {}", potionsWeak_rest()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _potionsStandard_main {}", potionsStandard_main()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _potionsStandard_rest {}", potionsStandard_rest()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _potionsPotent_main {}", potionsPotent_main()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _potionsPotent_rest {}", potionsPotent_rest()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _potionsInsane_main {}", potionsInsane_main()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _potionsInsane_rest {}", potionsInsane_rest()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _potionsBlood {}", potionsBlood()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _poisonsWeak {}", poisonsWeak()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _poisonsStandard {}", poisonsStandard()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _poisonsPotent {}", poisonsPotent()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _poisonsInsane {}", poisonsInsane()->size());
+	LOGL1_1("{}[Settings] [ClassifyItems] _foodall {}", foodall()->size());
+
+	if (Logging::EnableLoadLog && Logging::LogLevel >= 4) {
+		std::string path = "Data\\SKSE\\Plugins\\NPCsUsePotions\\items.txt";
+		std::ofstream out = std::ofstream(path, std::ofstream::out);
+		std::unordered_set<RE::FormID> visited;
+		out << "potionsWeak_main\n";
+		auto it = potionsWeak_main()->begin();
+		while (it != potionsWeak_main()->end()) {
+			if (!visited.contains(std::get<1>(*it)->GetFormID()))
+				out << ";" << std::get<1>(*it)->GetName() << "\n"
+					<< "1|7|<" << Utility::GetHex(std::get<1>(*it)->GetFormID()) << ",>\n";
+			visited.insert(std::get<1>(*it)->GetFormID());
+			it++;
+		}
+		out << "potionsStandard_main\n";
+		it = potionsStandard_main()->begin();
+		while (it != potionsStandard_main()->end()) {
+			if (!visited.contains(std::get<1>(*it)->GetFormID()))
+				out << ";" << std::get<1>(*it)->GetName() << "\n"
+					<< "1|7|<" << Utility::GetHex(std::get<1>(*it)->GetFormID()) << ",>\n";
+			visited.insert(std::get<1>(*it)->GetFormID());
+			it++;
+		}
+		out << "potionsStandard_rest\n";
+		it = potionsStandard_rest()->begin();
+		while (it != potionsStandard_rest()->end()) {
+			if (!visited.contains(std::get<1>(*it)->GetFormID()))
+				out << ";" << std::get<1>(*it)->GetName() << "\n"
+					<< "1|7|<" << Utility::GetHex(std::get<1>(*it)->GetFormID()) << ",>\n";
+			visited.insert(std::get<1>(*it)->GetFormID());
+			it++;
+		}
+		out << "potionsPotent_main\n";
+		it = potionsPotent_main()->begin();
+		while (it != potionsPotent_main()->end()) {
+			if (!visited.contains(std::get<1>(*it)->GetFormID()))
+				out << ";" << std::get<1>(*it)->GetName() << "\n"
+					<< "1|7|<" << Utility::GetHex(std::get<1>(*it)->GetFormID()) << ",>\n";
+			visited.insert(std::get<1>(*it)->GetFormID());
+			it++;
+		}
+		out << "potionsInsane_main\n";
+		it = potionsInsane_main()->begin();
+		while (it != potionsInsane_main()->end()) {
+			if (!visited.contains(std::get<1>(*it)->GetFormID()))
+				out << ";" << std::get<1>(*it)->GetName() << "\n"
+					<< "1|7|<" << Utility::GetHex(std::get<1>(*it)->GetFormID()) << ",>\n";
+			visited.insert(std::get<1>(*it)->GetFormID());
+			it++;
+		}
+		out << "potionsBlood\n";
+		it = potionsBlood()->begin();
+		while (it != potionsBlood()->end()) {
+			if (!visited.contains(std::get<1>(*it)->GetFormID()))
+				out << ";" << std::get<1>(*it)->GetName() << "\n"
+					<< "1|7|<" << Utility::GetHex(std::get<1>(*it)->GetFormID()) << ",>\n";
+			visited.insert(std::get<1>(*it)->GetFormID());
+			it++;
+		}
+		out << "poisonsWeak\n";
+		it = poisonsWeak()->begin();
+		while (it != poisonsWeak()->end()) {
+			if (!visited.contains(std::get<1>(*it)->GetFormID()))
+				out << ";" << std::get<1>(*it)->GetName() << "\n"
+					<< "1|7|<" << Utility::GetHex(std::get<1>(*it)->GetFormID()) << ",>\n";
+			visited.insert(std::get<1>(*it)->GetFormID());
+			it++;
+		}
+		out << "poisonsStandard\n";
+		it = poisonsStandard()->begin();
+		while (it != poisonsStandard()->end()) {
+			if (!visited.contains(std::get<1>(*it)->GetFormID()))
+				out << ";" << std::get<1>(*it)->GetName() << "\n"
+					<< "1|7|<" << Utility::GetHex(std::get<1>(*it)->GetFormID()) << ",>\n";
+			visited.insert(std::get<1>(*it)->GetFormID());
+			it++;
+		}
+		out << "poisonsPotent\n";
+		it = poisonsPotent()->begin();
+		while (it != poisonsPotent()->end()) {
+			if (!visited.contains(std::get<1>(*it)->GetFormID()))
+				out << ";" << std::get<1>(*it)->GetName() << "\n"
+					<< "1|7|<" << Utility::GetHex(std::get<1>(*it)->GetFormID()) << ",>\n";
+			visited.insert(std::get<1>(*it)->GetFormID());
+			it++;
+		}
+		out << "poisonsInsane\n";
+		it = poisonsInsane()->begin();
+		while (it != poisonsInsane()->end()) {
+			if (!visited.contains(std::get<1>(*it)->GetFormID()))
+				out << ";" << std::get<1>(*it)->GetName() << "\n"
+					<< "1|7|<" << Utility::GetHex(std::get<1>(*it)->GetFormID()) << ",>\n";
+			visited.insert(std::get<1>(*it)->GetFormID());
+			it++;
+		}
+		out << "foodall\n";
+		it = foodall()->begin();
+		while (it != foodall()->end()) {
+			if (!visited.contains(std::get<1>(*it)->GetFormID()))
+				out << ";" << std::get<1>(*it)->GetName() << "\n"
+					<< "1|7|<" << Utility::GetHex(std::get<1>(*it)->GetFormID()) << ",>\n";
+			visited.insert(std::get<1>(*it)->GetFormID());
+			it++;
+		}
+
+		std::string pathing = "Data\\SKSE\\Plugins\\NPCsUsePotions\\ingredients.csv";
+		std::ofstream outing = std::ofstream(pathing, std::ofstream::out);
+		for (int i = 0; i < ingredienteffectmap.size(); i++) {
+			outing << std::get<0>(ingredienteffectmap[i]) << ";" << std::get<1>(ingredienteffectmap[i]) << "\n";
+		}
+	}
 }
 
-Distribution::NPCTPLTInfo Distribution::ExtractTemplateInfo(RE::TESNPC* npc)
+std::tuple<AlchemicEffect, ItemStrength, ItemType, int, float, bool> Settings::ClassifyItem(RE::AlchemyItem* item)
 {
-	Distribution::NPCTPLTInfo info;
-	if (npc == nullptr)
-		return info; 
-	if (npc->baseTemplateForm == nullptr) {
-		// we are at the base, so do the main work
-		info.tpltrace = npc->GetRace();
-		info.tpltstyle = npc->combatStyle;
-		info.tpltclass = npc->npcClass;
-		for (uint32_t i = 0; i < npc->numKeywords; i++) {
-			if (npc->keywords[i])
-				info.tpltkeywords.push_back(npc->keywords[i]);
-		}
-		for (uint32_t i = 0; i < npc->factions.size(); i++) {
-			if (npc->factions[i].faction)
-				info.tpltfactions.push_back(npc->factions[i].faction);
-		}
-		return info;
-	}
-	RE::TESNPC* tplt = npc->baseTemplateForm->As<RE::TESNPC>();
-	RE::TESLevCharacter* lev = npc->baseTemplateForm->As<RE::TESLevCharacter>();
-	Distribution::NPCTPLTInfo tpltinfo;
-	if (tplt) {
-		// get info about template and then integrate into our local information according to what we use
-		tpltinfo = ExtractTemplateInfo(tplt);
-	} else if (lev) {
-		tpltinfo = ExtractTemplateInfo(lev);
-	} else {
-		//logger::info("template invalid");
-	}
-
-	if (npc->actorData.templateUseFlags & RE::ACTOR_BASE_DATA::TEMPLATE_USE_FLAG::kFactions) {
-		info.tpltfactions = tpltinfo.tpltfactions;
-	} else {
-		for (uint32_t i = 0; i < npc->factions.size(); i++) {
-			if (npc->factions[i].faction)
-				info.tpltfactions.push_back(npc->factions[i].faction);
-		}
-	}
-	if (npc->actorData.templateUseFlags & RE::ACTOR_BASE_DATA::TEMPLATE_USE_FLAG::kKeywords) {
-		info.tpltkeywords = tpltinfo.tpltkeywords;
-	} else {
-		for (uint32_t i = 0; i < npc->numKeywords; i++) {
-			if (npc->keywords[i])
-				info.tpltkeywords.push_back(npc->keywords[i]);
-		}
-	}
-	if (npc->actorData.templateUseFlags & RE::ACTOR_BASE_DATA::TEMPLATE_USE_FLAG::kTraits) {
-		// race
-		info.tpltrace = tpltinfo.tpltrace;
-	} else {
-		info.tpltrace = npc->GetRace();
-	}
-	if (npc->actorData.templateUseFlags & RE::ACTOR_BASE_DATA::TEMPLATE_USE_FLAG::kStats) {
-		// class
-		info.tpltclass = tpltinfo.tpltclass;
-	} else {
-		info.tpltclass = npc->npcClass;
-	}
-	if (npc->actorData.templateUseFlags & RE::ACTOR_BASE_DATA::TEMPLATE_USE_FLAG::kAIData) {
-		// combatstyle
-		info.tpltstyle = tpltinfo.tpltstyle;
-	} else {
-		info.tpltstyle = npc->combatStyle;
-	}
-	return info;
-}
-
-std::tuple<uint64_t, ItemStrength, ItemType> Settings::ClassifyItem(RE::AlchemyItem* item)
-{
-	LOG_1("{}[Settings] [ClassifyItem]");
 	RE::EffectSetting* sett = nullptr;
 	if ((item->avEffectSetting) == nullptr && item->effects.size() == 0) {
-		return { 0, ItemStrength::kStandard, ItemType::kFood };
+		return { 0, ItemStrength::kStandard, ItemType::kFood, 0, 0.0f, false };
 	}
 	// we look at max 4 effects
-	RE::ActorValue av[4]{
-		RE::ActorValue::kAlchemy,
-		RE::ActorValue::kAlchemy,
-		RE::ActorValue::kAlchemy,
-		RE::ActorValue::kAlchemy
+	AlchemicEffect av[4]{
+		0,
+		0,
+		0,
+		0
 	};
 	float mag[]{
 		0,
@@ -1803,302 +3161,76 @@ std::tuple<uint64_t, ItemStrength, ItemType> Settings::ClassifyItem(RE::AlchemyI
 		0,
 		0
 	};
+	bool detrimental = false;
+	bool positive = false;
 	// we will not abort the loop, since the number of effects on one item is normally very
 	// limited, so we don't have much iterations
+	AlchemicEffect tmp = 0;
 	if (item->effects.size() > 0) {
 		for (uint32_t i = 0; i < item->effects.size() && i < 4; i++) {
 			sett = item->effects[i]->baseEffect;
 			// just retrieve the effects, we will analyze them later
 			if (sett) {
-				av[i] = sett->data.primaryAV;
 				mag[i] = item->effects[i]->effectItem.magnitude;
 				dur[i] = item->effects[i]->effectItem.duration;
+
+				// force area to zero, to avoid CTDs when using the item.
+				item->effects[i]->effectItem.area = 0;
+
+				detrimental |= sett->IsDetrimental();
+				positive |= !sett->IsDetrimental();
+
+				uint32_t formid = sett->GetFormID();
+				if ((tmp = (ConvertToAlchemyEffectPrimary(sett))) > 0) {
+					av[i] |= tmp;
+				}
+				if (sett->data.archetype == RE::EffectArchetypes::ArchetypeID::kDualValueModifier && (tmp = ConvertToAlchemyEffectSecondary(sett)) > 0) {
+					av[i] |= tmp;
+				}
 				// we only need this for magnitude calculations, so its not used as cooldown
 				if (dur[i] == 0)
 					dur[i] = 1;
 			}
 		}
 	} else {
+		// emergency fallback // more or less unused
 		RE::MagicItem::SkillUsageData err;
 		item->GetSkillUsageData(err);
+		detrimental |= item->avEffectSetting->IsDetrimental();
+		positive |= !item->avEffectSetting->IsDetrimental();
 		switch (item->avEffectSetting->data.primaryAV) {
 		case RE::ActorValue::kHealth:
-			av[0] = item->avEffectSetting->data.primaryAV;
+			av[0] = ConvertToAlchemyEffect(item->avEffectSetting->data.primaryAV);
 			mag[0] = err.magnitude;
 			dur[0] = 1;
 			break;
 		case RE::ActorValue::kMagicka:
-			av[0] = item->avEffectSetting->data.primaryAV;
+			av[0] = ConvertToAlchemyEffect(item->avEffectSetting->data.primaryAV);
 			mag[0] = err.magnitude;
 			dur[0] = 1;
 			break;
 		case RE::ActorValue::kStamina:
-			av[0] = item->avEffectSetting->data.primaryAV;
+			av[0] = ConvertToAlchemyEffect(item->avEffectSetting->data.primaryAV);
 			mag[0] = err.magnitude;
 			dur[0] = 1;
 			break;
 		}
 	}
 	// analyze the effect types
-	uint64_t alch = static_cast<uint64_t>(AlchemyEffect::kNone);
+	AlchemicEffect alch = 0;
 	ItemStrength str = ItemStrength::kWeak;
 	float maxmag = 0;
+	int maxdur = 0;
 	for (int i = 0; i < 4; i++) {
-		if (dur[i] > 10)
-			dur[i] = 10;
-		switch (av[i]) {
-		case RE::ActorValue::kHealth:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kHealth);
-			if (mag[i] * dur[i] > maxmag)
-				maxmag = mag[i] * dur[i];
-			break;
-		case RE::ActorValue::kMagicka:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kMagicka);
-			if (mag[i] * dur[i] > maxmag)
-				maxmag = mag[i] * dur[i];
-			break;
-		case RE::ActorValue::kStamina:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kStamina);
-			if (mag[i] * dur[i] > maxmag)
-				maxmag = mag[i] * dur[i];
-			break;
-		case RE::ActorValue::kOneHanded:
-		case RE::ActorValue::kOneHandedModifier:
-		case RE::ActorValue::kOneHandedPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kOneHanded);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kTwoHanded:
-		case RE::ActorValue::kTwoHandedModifier:
-		case RE::ActorValue::kTwoHandedPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kTwoHanded);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kArchery:
-		case RE::ActorValue::kMarksmanModifier:
-		case RE::ActorValue::kMarksmanPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kArchery);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kBlock:
-		case RE::ActorValue::kBlockModifier:
-		case RE::ActorValue::kBlockPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kBlock);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		//case RE::ActorValue::kSmithing:
-		//	break;
-		case RE::ActorValue::kHeavyArmor:
-		case RE::ActorValue::kHeavyArmorModifier:
-		case RE::ActorValue::kHeavyArmorPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kHeavyArmor);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kLightArmor:
-		case RE::ActorValue::kLightArmorModifier:
-		case RE::ActorValue::kLightArmorSkillAdvance:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kLightArmor);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kPickpocket:
-		case RE::ActorValue::kPickpocketModifier:
-		case RE::ActorValue::kPickpocketPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kPickpocket);
-			break;
-		case RE::ActorValue::kLockpicking:
-		case RE::ActorValue::kLockpickingModifier:
-		case RE::ActorValue::kLockpickingPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kLockpicking);
-			break;
-		case RE::ActorValue::kSneak:
-		case RE::ActorValue::kSneakingModifier:
-		case RE::ActorValue::kSneakingPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kSneak);
-			break;
-		//case RE::ActorValue::kAlchemy:
-		//case RE::ActorValue::kAlchemyModifier:
-		//case RE::ActorValue::kAlchemyPowerModifier:
-		//	break;
-		//case RE::ActorValue::kSpeech:
-		//case RE::ActorValue::kSpeechcraftModifier:
-		//case RE::ActorValue::kSpeechcraftPowerModifier:
-		//	break;
-		case RE::ActorValue::kAlteration:
-		case RE::ActorValue::kAlterationModifier:
-		case RE::ActorValue::kAlterationPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kAlteration);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kConjuration:
-		case RE::ActorValue::kConjurationModifier:
-		case RE::ActorValue::kConjurationPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kConjuration);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kDestruction:
-		case RE::ActorValue::kDestructionModifier:
-		case RE::ActorValue::kDestructionPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kDestruction);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kIllusion:
-		case RE::ActorValue::kIllusionModifier:
-		case RE::ActorValue::kIllusionPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kIllusion);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kRestoration:
-		case RE::ActorValue::kRestorationModifier:
-		case RE::ActorValue::kRestorationPowerModifier:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kRestoration);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-			//case RE::ActorValue::kEnchanting:
-			//case RE::ActorValue::kEnchantingModifier:
-			//case RE::ActorValue::kEnchantingPowerModifier:
-			//	break;
-		case RE::ActorValue::kHealRate:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kHealRate);
-			if (mag[i] > maxmag)
-				maxmag = mag[i];
-			break;
-		case RE::ActorValue::kMagickaRate:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kMagickaRate);
-			if (mag[i] > maxmag)
-				maxmag = mag[i];
-			break;
-		case RE::ActorValue::KStaminaRate:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kStaminaRate);
-			if (mag[i] > maxmag)
-				maxmag = mag[i];
-			break;
-		case RE::ActorValue::kSpeedMult:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kSpeedMult);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		//case RE::ActorValue::kInventoryWeight:
-		//	break;
-		//case RE::ActorValue::kCarryWeight:
-		//	break;
-		case RE::ActorValue::kCriticalChance:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kCriticalChance);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kMeleeDamage:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kMeleeDamage);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kUnarmedDamage:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kUnarmedDamage);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kDamageResist:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kDamageResist);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kPoisonResist:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kPoisonResist);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kResistFire:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kResistFire);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kResistShock:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kResistShock);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kResistFrost:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kResistFrost);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kResistMagic:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kResistMagic);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kResistDisease:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kResistDisease);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kParalysis:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kParalysis);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kInvisibility:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kInvisibility);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		//case RE::ActorValue::kNightEye:
-		//	break;
-		//case RE::ActorValue::kDetectLifeRange:
-		//	break;
-		//case RE::ActorValue::kWaterBreathing:
-		//	break;
-		//case RE::ActorValue::kWaterWalking:
-		//	break;
-		case RE::ActorValue::kWeaponSpeedMult:
-		case RE::ActorValue::kLeftWeaponSpeedMultiply:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kWeaponSpeedMult);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kBowSpeedBonus:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kBowSpeed);
-			break;
-		case RE::ActorValue::kAttackDamageMult:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kAttackDamageMult);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kHealRateMult:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kHealRateMult);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kMagickaRateMult:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kMagickaRateMult);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kStaminaRateMult:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kStaminaRateMult);
-			//if (mag[i] < maxmag)
-			//	maxmag = mag[i];
-			break;
-		case RE::ActorValue::kAggresion:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kFrenzy);
-			break;
-		case RE::ActorValue::kConfidence:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kFear);
-			break;
-		case RE::ActorValue::kReflectDamage:
-			alch |= static_cast<uint64_t>(AlchemyEffect::kReflectDamage);
-			break;
+		if (mag[i] == 0)
+			mag[i] = 1;
+		if (dur[i] == 0)
+			dur[i] = 1;
+		if (mag[i] * dur[i] > maxmag) {
+			maxmag = mag[i] * dur[i];
+			maxdur = dur[i];
 		}
+		alch |= av[i];
 	}
 	if (std::string(item->GetName()).find(std::string("Weak")) != std::string::npos)
 		str = ItemStrength::kWeak;
@@ -2108,41 +3240,52 @@ std::tuple<uint64_t, ItemStrength, ItemType> Settings::ClassifyItem(RE::AlchemyI
 		str = ItemStrength::kPotent;
 	else if (maxmag == 0)
 		str = ItemStrength::kStandard;
-	else if (maxmag <= NUPSettings::_MaxMagnitudeWeak)
+	else if (maxmag <= NUPSettings::Distr::_MaxMagnitudeWeak)
 		str = ItemStrength::kWeak;
-	else if (maxmag <= NUPSettings::_MaxMagnitudeStandard)
+	else if (maxmag <= NUPSettings::Distr::_MaxMagnitudeStandard)
 		str = ItemStrength::kStandard;
-	else if (maxmag <= NUPSettings::_MaxMagnitudePotent)
+	else if (maxmag <= NUPSettings::Distr::_MaxMagnitudePotent)
 		str = ItemStrength::kPotent;
 	else
 		str = ItemStrength::kInsane;
+	auto iter = Distribution::itemStrengthMap()->find(item->GetFormID());
+	if (iter != Distribution::itemStrengthMap()->end()) {
+		str = iter->second;
+	}
 
 	// if the potion is a blood potion it should only ever appear on vampires, no the
 	// effects are overriden to AlchemyEffect::kBlood
 	if (std::string(item->GetName()).find(std::string("Blood")) != std::string::npos &&
 		std::string(item->GetName()).find(std::string("Potion")) != std::string::npos) {
-		alch = static_cast<uint64_t>(AlchemyEffect::kBlood);
+		alch = AlchemicEffect::kBlood;
+		// if we have a blood potion, make sure that it has the medicine flag
+		if (item->IsMedicine() == false)
+			item->data.flags = RE::AlchemyItem::AlchemyFlag::kMedicine | item->data.flags;
 	}
 
-	ItemType t = ItemType::kPotion;
-	if (item->IsFood())
-		t = ItemType::kFood;
-	else if (item->IsPoison())
-		t = ItemType::kPoison;
-
-	return { alch, str, t };
-}
-
-void Settings::Interfaces::RequestAPIs()
-{
-	LOG_1("{}[Settings] [RequestAPIs]");
-	if (!nupinter) {
-		nupinter = reinterpret_cast<NPCsUsePotions::NUPInterface*>(NPCsUsePotions::RequestPluginAPI());
-		if (nupinter)
-			logger::info("[Settings] [RequestAPIs] loaded NPCsUsePotions api");
-		else
-			logger::info("[Settings] [RequestAPIs] failed to obtain NPCsUsePotions api");
+	ItemType type = ItemType::kPotion;
+	if (item->IsFood() || item->HasKeyword(GameObj::VendorItemFood) || item->HasKeyword(GameObj::VendorItemFoodRaw))
+		type = ItemType::kFood;
+	else if (item->IsPoison() || item->HasKeyword(Settings::GameObj::VendorItemPoison)) {
+		type = ItemType::kPoison;
+		return {
+			alch,
+			str,
+			type,
+			maxdur,
+			maxmag,
+			positive  // return whether there is a positive effect on the poison
+		};
 	}
+
+	return {
+		alch,
+		str,
+		type,
+		maxdur,
+		maxmag,
+		detrimental
+	};
 }
 
 #pragma endregion

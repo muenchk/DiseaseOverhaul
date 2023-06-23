@@ -296,6 +296,9 @@ private:
 
 public:
 
+	Disease();
+	~Disease();
+
 	/// <summary>
 	/// Name of the disease
 	/// </summary>

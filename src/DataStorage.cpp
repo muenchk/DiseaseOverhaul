@@ -4,6 +4,7 @@
 #include "Events.h"
 #include "Data.h"
 #include "Utility.h"
+#include "Stats.h"
 
 namespace Storage
 {
@@ -77,97 +78,84 @@ namespace Storage
 
 	void ReadData(SKSE::SerializationInterface* a_intfc)
 	{
-		bool preproc = Events::LockProcessing();
+		bool preproc = Events::Main::LockProcessing();
+
+		// total number of bytes read
+		long size = 0;
+
+		LOG_1("{}[DataStorage] [ReadData] Beginning data load...");
 
 		uint32_t type = 0;
 		uint32_t version = 0;
 		uint32_t length = 0;
 
+		// for actor info map
 		int accounter = 0;
 		int acfcounter = 0;
+		int acdcounter = 0;
 
 		loginfo("[DataStorage] [ReadData] Beginning data load...");
 		while (a_intfc->GetNextRecordInfo(type, version, length)) {
 			loginfo("[DataStorage] found record with type {} and length {}", type, length);
 			switch (type) {
 			case 'ACIF':  // ActorInfo
-				unsigned char* buffer = new unsigned char[length];
-				a_intfc->ReadRecordData(buffer, length);
-				ActorInfo* acinfo = new ActorInfo();
-				if (acinfo->ReadData(buffer, 0, length) == false) {
-					acfcounter++;
-					logwarn("[DataStorage] Couldn't read ActorInfo");
-				} else {
-					accounter++;
-					data->ActorInfoMap()->insert_or_assign(acinfo->actor->GetFormID(), acinfo);
-					loginfo("[DataStorage] read ActorInfo. id: {}, name: {}", Utility::GetHex(acinfo->actor->GetFormID()), acinfo->actor->GetName());
-				}
+				size += data->ReadActorInfoMap(a_intfc, length, accounter, acdcounter, acfcounter);
+				break;
+			case 'DAID':  // Deleted Actor
+				size += data->ReadDeletedActors(a_intfc, length);
+				break;
+			case 'EDID':  // Dead Actor
+				size += Events::Main::ReadDeadActors(a_intfc, length);
 				break;
 			}
 		}
 
-		loginfo("[DataStorage] [ReadData] Read {} ActorInfos", accounter);
-		loginfo("[DataStorage] [ReadData] Failed to read {} ActorInfos", acfcounter);
+		Stats::Storage_BytesReadLast = size;
+		Stats::Storage_ActorsReadLast = accounter;
+		LOG1_1("{}[Data] [ReadActorInfoMap] Read {} ActorInfos", accounter);
+		LOG1_1("{}[Data] [ReadActorInfoMap] Read {} dead, deleted or invalid ActorInfos", acdcounter);
+		LOG1_1("{}[Data] [ReadActorInfoMap] Failed to read {} ActorInfos", acfcounter);
 
 		loginfo("[DataStorage] [ReadData] Finished loading data");
 		if (preproc) {  // if processing was enabled before locking
-			Events::UnlockProcessing();
+			Events::Main::UnlockProcessing();
 			loginfo("[DataStorage] [ReadData] Enable processing");
 		}
 	}
 
 	void WriteData(SKSE::SerializationInterface* a_intfc)
 	{
-		bool preproc = Events::LockProcessing();
+		bool preproc = Events::Main::LockProcessing();
+
+		// total number of bytes written
+		long size = 0;
 
 		loginfo("[DataStorage] [WriteData] Beginning to write data...");
-		
-		loginfo("[DataStorage] [WriteData] Writing ActorInfo");
-		auto itr = data->ActorInfoMap()->begin();
-		while (itr != data->ActorInfoMap()->end()) {
-			if (itr->second && itr->second->actor && itr->second->actor->IsDead() == false) {
-				// open skse record
-				if (a_intfc->OpenRecord('ACIF', 0)) {
-					// get entry length
-					int length = itr->second->GetDataSize();
-					// create buffer
-					unsigned char* buffer = new unsigned char[length];
-					// fill buffer
-					itr->second->WriteData(buffer, 0);
-					// write record
-					a_intfc->WriteRecordData(buffer, length);
-				} else
-					logwarn("[DataStorage] [WriteData] failed to write ActorInfo record for {}", Utility::GetHex(itr->second->actor->GetFormID()));
-			}
-			itr++;
-		}
+
+		data->CleanActorInfos();
+		size += data->SaveActorInfoMap(a_intfc);
+		size += data->SaveDeletedActors(a_intfc);
+		size += Events::Main::SaveDeadActors(a_intfc);
 
 		loginfo("[DataStorage] [WriteData] Finished writing data");
 
 		if (preproc) {  // if processing was enabled before locking
-			Events::UnlockProcessing();
+			Events::Main::UnlockProcessing();
 			loginfo("[DataStorage] [WriteData] Enable processing");
 		}
+		Stats::Storage_BytesWrittenLast = size;
 	}
 
 	void RevertData()
 	{
-		bool preproc = Events::LockProcessing();
+		bool preproc = Events::Main::LockProcessing();
 
-		loginfo("[DataStorage] [RevertData] Reverting ActorInfo");
-		auto itr = data->ActorInfoMap()->begin();
-		while (itr != data->ActorInfoMap()->end()) {
-			if (itr->second)
-				try {
-					delete itr->second;
-				} catch (std::exception&) {}
-			itr++;
-		}
-		data->ActorInfoMap()->clear();
+		LOG_1("{}[DataStorage] [RevertData] Reverting ActorInfo");
+		data->DeleteActorInfoMap();
 
-		loginfo("[DataStorage] [RevertData] Finished reverting");
+		LOG_1("{}[DataStorage] [RevertData] Finished reverting");
 
-		if (preproc) // if processing was enabled before locking
-			Events::UnlockProcessing();
+		if (preproc)  // if processing was enabled before locking
+			Events::Main::UnlockProcessing();
 	}
 }

@@ -5,15 +5,21 @@ include_directories("${ROOT_DIR}/include")
 set(SOURCE_DIR "${ROOT_DIR}/src")
 set(SOURCE_FILES
 	"${SOURCE_DIR}/ActorInfo.cpp"
+	"${SOURCE_DIR}/ActorManipulation.cpp"
 	"${SOURCE_DIR}/AlchemyEffect.cpp"
+	"${SOURCE_DIR}/BufferOperations.cpp"
 	"${SOURCE_DIR}/CellInfo.cpp"
+	"${SOURCE_DIR}/Compatibility.cpp"
 	"${SOURCE_DIR}/Data.cpp"
 	"${SOURCE_DIR}/DataStorage.cpp"
 	"${SOURCE_DIR}/Disease.cpp"
 	"${SOURCE_DIR}/DiseaseStats.cpp"
 	"${SOURCE_DIR}/Distribution.cpp"
 	"${SOURCE_DIR}/Events.cpp"
+	"${SOURCE_DIR}/Events_Main.cpp"
+	"${SOURCE_DIR}/Events_Main_Support.cpp"
 	"${SOURCE_DIR}/Game.cpp"
+	"${SOURCE_DIR}/ID.cpp"
 	"${SOURCE_DIR}/main.cpp"
 	"${SOURCE_DIR}/PCH.h"
 	"${SOURCE_DIR}/Random.cpp"
@@ -22,6 +28,7 @@ set(SOURCE_FILES
 	"${SOURCE_DIR}/SettingsLoadSave.cpp"
 	"${SOURCE_DIR}/Utility.cpp"
 	"${SOURCE_DIR}/UtilityAlch.cpp"
+	"${SOURCE_DIR}/WeatherInfo.cpp"
 )
 
 source_group(TREE "${ROOT_DIR}" FILES ${SOURCE_FILES})
@@ -117,22 +124,13 @@ target_include_directories(
 )
 
 
-if (DEFINED CACHE{SKYRIM_SUPPORT_AE353})
-	target_compile_definitions("${PROJECT_NAME}" PUBLIC SKYRIM_SUPPORT_AE353=1)
-	add_subdirectory($ENV{CommonLibSSE353Path} CommonLibSSE)
-	target_link_libraries(
-		"${PROJECT_NAME}"
-		PRIVATE
-			CommonLibSSE::CommonLibSSE
-	)
-else()
-	add_subdirectory($ENV{CommonLibSSEPath} CommonLibSSE)
-	target_link_libraries(
-		"${PROJECT_NAME}"
-		PRIVATE
-			CommonLibSSE::CommonLibSSE
-	)
-endif()
+add_subdirectory($ENV{CommonLibNGPath} CommonLibSSE EXCLUDE_FROM_ALL)
+
+target_link_libraries(
+	"${PROJECT_NAME}"
+	PRIVATE
+		CommonLibSSE::CommonLibSSE
+)
 
 target_precompile_headers(
 	"${PROJECT_NAME}"

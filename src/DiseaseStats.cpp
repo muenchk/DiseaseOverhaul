@@ -22,6 +22,9 @@ DiseaseInfo* DiseaseStats::FindDisease(Diseases::Disease value)
 
 bool DiseaseStats::ProgressDisease(RE::Actor* actor, Diseases::Disease value, float points)
 {
+	if (actor == nullptr)
+		return false;
+
 	LOG_3("{}[DiseaseStats] [ProgressDisease]");
 
 	// stat tracking
@@ -140,7 +143,7 @@ bool DiseaseStats::ProgressDisease(RE::Actor* actor, Diseases::Disease value, fl
 					// dont't change anything else, we are regressing from the current point
 				}
 
-			} else if (currentgameday > dinfo->earliestAdvancement || Settings::AlchExtSettings::_ignoreTimeAdvancementConstraint) {
+			} else if (currentgameday > dinfo->earliestAdvancement || Settings::Disease::_ignoreTimeAdvancementConstraint) {
 				LOG_4("{}[DiseaseStats] [ProgressDisease] advance");
 				// advance to next stage
 				// remove last effect

@@ -140,8 +140,11 @@ struct Spreading
 		kIsStormy = 18,       // when the weather is stormy
 		kIsCold = 19,     // when the weather is cold
 		kIsHeat = 20,       // when the weather is hot
+		kExtremeConditions = 21,
+		kActionPhysical = 22,
+		kActionMagical = 23,
 
-		kMaxValue = 21,
+		kMaxValue = 24,
 	};
 };
 
@@ -245,12 +248,13 @@ struct DiseaseEndEvents
 {
 	enum DiseaseEndEvent : EnumType
 	{
-		kNone = 0,					// nothing happens
+		kNone = 0,					// nothing happens, i.e. infinity
 		kDie100 = 1 << 0,			// dies 100%
 		kDie75 = 1 << 1,			// dies with 75% probability
 		kDie50 = 1 << 2,			// dies with 50% probability
 		kDie25 = 1 << 3,			// dies with 25% probability
 		kNoRegression = 1 << 4,		// the actor does not enter regression
+		kRegression = 1 << 5, 		// the actor enters regression
 	};
 };
 

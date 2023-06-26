@@ -60,6 +60,14 @@ public:
 	{
 		return weathertype & WeatherTypes::kHeatWave;
 	}
+	bool IsExtremeCondition()
+	{
+		return weathertype & WeatherTypes::kAshstorm |
+			weathertype & WeatherTypes::kBlizzard |
+			weathertype & WeatherTypes::kHeatWave |
+			weathertype & WeatherTypes::kSandstorm |
+			weathertype & WeatherTypes::kThunderstorm;
+	}
 
 	std::vector<Diseases::Disease> GetPossibleInfections();
 };

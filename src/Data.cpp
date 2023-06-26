@@ -736,6 +736,7 @@ void Data::InitDiseases()
 	// Ash Woe Blight
 	{
 		diseases[Diseases::kAshWoeBlight]->_name = UtilityAlch::ToString(Diseases::kAshWoeBlight);
+		diseases[Diseases::kAshWoeBlight]->_type = DiseaseType::kBlight;
 		diseases[Diseases::kAshWoeBlight]->_numstages = 4;
 		diseases[Diseases::kAshWoeBlight]->_stageInfection->_advancementThreshold = 100;
 		diseases[Diseases::kAshWoeBlight]->_baseProgressionPoints = 0;

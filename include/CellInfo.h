@@ -54,6 +54,12 @@ public:
 	bool IsHeat() {
 		return celltype & CellInfoType::kHeat;
 	}
+	bool IsExtremeCondition() {
+		return celltype & CellInfoType::kDessert |
+				celltype & CellInfoType::kIceland |
+				celltype & CellInfoType::kIntenseCold |
+				celltype & CellInfoType::kIntenseHeat |;
+	}
 
 	std::vector<Diseases::Disease> GetPossibleInfections();
 };

@@ -420,6 +420,11 @@ namespace Events
 										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kIsWindy]))
 											points[x] += scale * std::get<1>(stage->_spreading[Spreading::kIsWindy]);
 									}
+									if (winfo->IsExtremeCondition())
+									{
+										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kExtremeConditions]))
+											points[x] += scale * std::get<1>(stage->_spreading[Spreading::kExtremeConditions]);
+									}
 
 									//  handle cell effects
 									cinfo = data->FindCell(actors[x]->GetParentCell());
@@ -448,6 +453,11 @@ namespace Events
 									if (cinfo->IsSwamp()) {
 										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kInSwamp]))
 											points[x] += scale * std::get<1>(stage->_spreading[Spreading::kInSwamp]);
+									}
+									if (cinfo->IsExtremeCondition())
+									{
+										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kExtremeConditions]))
+											points[x] += scale * std::get<1>(stage->_spreading[Spreading::kExtremeConditions]);
 									}
 								}
 							} else {
@@ -481,6 +491,9 @@ namespace Events
 								} else if (winfo->IsWindy()) {
 									points[x] += ((float)std::get<0>(stage->_spreading[Spreading::kIsWindy]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kIsWindy]);
 								}
+								if (winfo->IsExtremeCondition()) {
+									points[x] += ((float)std::get<0>(stage->_spreading[Spreading::kExtremeConditions]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kInRain]);
+								}
 
 								//  handle cell effects
 								cinfo = data->FindCell(actors[x]->GetParentCell());
@@ -502,6 +515,9 @@ namespace Events
 								}
 								if (cinfo->IsSwamp()) {
 									points[x] += ((float)std::get<0>(stage->_spreading[Spreading::kInSwamp]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kInSwamp]);
+								}
+								if (cinfo->IsExtremeCondition()) {
+									points[x] += ((float)std::get<0>(stage->_spreading[Spreading::kExtremeConditions]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kInSwamp]);
 								}
 							}
 

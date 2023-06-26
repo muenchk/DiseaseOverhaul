@@ -41,6 +41,20 @@ public:
 	}
 
 	/// <summary>
+	/// Returns a string representing the [disease]
+	/// </summary>
+	/// <param name="disease"></param>
+	/// <returns></returns>
+	static std::string ToString(std::shared_ptr<Disease>& disease);
+
+	/// <summary>
+	/// Returns a string representing the [stage]
+	/// </summary>
+	/// <param name="stage"></param>
+	/// <returns></returns>
+	static std::string ToString(std::shared_ptr<DiseaseStage>& stage);
+
+	/// <summary>
 	/// Returns only infected actors from a list of actors
 	/// </summary>
 	/// <param name="actors"></param>

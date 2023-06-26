@@ -5,6 +5,8 @@
 
 typedef uint32_t EnumType;
 
+typedef float Magnitude;
+
 struct Diseases
 {
 	enum Disease : EnumType
@@ -258,13 +260,18 @@ struct DiseaseEndEvents
 	};
 };
 
+enum class DiseaseEffect
+{
+	kNone = 0,
+};
+
 class DiseaseStage
 {
 public:
 	/// <summary>
 	/// thresholds for the number of avancement points needed to progress to next stage
 	/// </summary>
-	int _advancementThreshold = 1;
+	float _advancementThreshold = 1;
 	/// <summary>
 	/// time a disease needs to progress before advancement
 	/// </summary>
@@ -272,7 +279,7 @@ public:
 	/// <summary>
 	/// precalculated for the stage adjusted spreading values summing stage effects and base effects
 	/// </summary>
-	std::pair<int /*chance*/, float /*points*/> _spreading[Spreading::kMaxValue];
+	std::pair<float /*chance*/, float /*points*/> _spreading[Spreading::kMaxValue];
 	/// <summary>
 	/// infectivity in stage, adjusts _spreading during runtime
 	/// </summary>
@@ -281,6 +288,12 @@ public:
 	/// game spell that contains the diseases effect in the stage
 	/// </summary>
 	RE::SpellItem* effect = nullptr;
+	/// <summary>
+	/// Specifier of the stage
+	/// </summary>
+	std::string _specifier;
+
+	std::vector<std::pair<DiseaseEffect, Magnitude>> _effects;
 };
 
 struct DiseaseFlags
@@ -314,19 +327,23 @@ public:
 	/// <summary>
 	/// dedicated stage for infection
 	/// </summary>
-	DiseaseStage* _stageInfection;
+	std::shared_ptr<DiseaseStage> _stageInfection;
 	/// <summary>
 	/// actual disease stages, according to numstages
 	/// </summary>
-	DiseaseStage** _stages;
+	std::shared_ptr<DiseaseStage>* _stages;
 	/// <summary>
 	/// pairs of chance / point values that determine how an infection is spread // these are the base chances for infection / progression
 	/// </summary>
-	std::pair<int /*chance*/, float /*points*/> _spreading[Spreading::kMaxValue];
+	std::pair<float /*chance*/, float /*points*/> _spreading[Spreading::kMaxValue];
 	/// <summary>
 	/// type of the disease
 	/// </summary>
 	DiseaseType _type;
+	/// <summary>
+	/// The disease
+	/// </summary>
+	Diseases::Disease _disease;
 
 
 	/// <summary>

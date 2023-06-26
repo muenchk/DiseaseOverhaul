@@ -160,7 +160,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 		// register data storage
 		Storage::Register();
 		// init diseases
-		Data::GetSingleton()->InitDiseases();
+		//Data::GetSingleton()->InitDiseases();
 		PROF1_1("{}[main] [Startup] execution time: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()));
 		break;
 	case SKSE::MessagingInterface::kPostLoad:
@@ -171,9 +171,7 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 
 extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
 {
-#ifdef SKYRIM_SUPPORT_AE
 	InitializeLog();
-#endif
 
 	logger::info("{} v{}"sv, Plugin::NAME, Plugin::VERSION.string());
 

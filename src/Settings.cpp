@@ -212,7 +212,6 @@ void Settings::LoadDistrConfigNUP()
 		}
 	}
 	if (files.empty()) {
-		loginfo("[SETTINGS] [LoadDistrRules] No Distribution files were found");
 	}
 	// init datahandler
 	auto datahandler = RE::TESDataHandler::GetSingleton();
@@ -2221,24 +2220,651 @@ void Settings::LoadDistrConfigNUP()
 	}
 }
 
+std::tuple<std::shared_ptr<DiseaseStage>, uint16_t> LoadDiseaseStage(std::vector<std::string>* splits, std::string file, std::string tmp)
+{
+	int splitindex = 0;
+	if (splits->size() < 69)  // if there are too few stages
+	{
+		logger::warn("[Settings] [LoadDiseaseStage] Not a rule. Expected {} fields, found {}. file: {}, rule:\"{}\"", 69, splits->size(), file, tmp);
+		return {};
+	}
+
+	std::shared_ptr<DiseaseStage> stg = std::make_shared<DiseaseStage>();
+
+	// get id
+	uint16_t stageid;
+	try {
+		stageid = std::stoi(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDiseaseStage] out-of-range expection in field \"StageID\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDiseaseStage] invalid-argument expection in field \"StageID\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// get specifier
+	stg->_specifier = splits->at(splitindex);
+	splitindex++;
+
+	// AdvancementThreshold
+	try {
+		stg->_advancementThreshold = std::stof(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDiseaseStage] out-of-range expection in field \"AdvancementThreshold\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDiseaseStage] invalid-argument expection in field \"AdvancementThreshold\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// AdvancementTime
+	try {
+		stg->_advancementTime = std::stof(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"AdvancementTime\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDiseaseStage] invalid-argument expection in field \"AdvancementTime\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// Infectivity
+	try {
+		stg->_infectivity = static_cast<Infectivity>(std::stoi(splits->at(splitindex)));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"Infectivity\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDiseaseStage] invalid-argument expection in field \"Infectivity\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// SpellFormID
+	RE::FormID spellid;
+	if (splits->at(splitindex) == "") {
+		spellid = 0;
+		splitindex++;
+	}
+	else
+		try {
+			spellid = std::stoull(splits->at(splitindex), nullptr, 16);
+			splitindex++;
+		} catch (std::out_of_range&) {
+			logwarn("[Settings] [LoadDisease] out-of-range expection in field \"SpellFormID\". file: {}, rule:\"{}\"", file, tmp);
+			return {};
+		} catch (std::invalid_argument&) {
+			logwarn("[Settings] [LoadDiseaseStage] invalid-argument expection in field \"SpellFormID\". file: {}, rule:\"{}\"", file, tmp);
+			return {};
+		}
+
+	// pluginname
+	std::string pluginname = splits->at(splitindex);
+	splitindex++;
+	if (Utility::ToLower(pluginname) == "settings")
+		pluginname = Settings::PluginName;
+
+	stg->effect = Data::GetSingleton()->FindSpell(spellid, pluginname);
+
+	auto ParseEffects = [&splits, &splitindex, &file, &tmp]() {
+		DiseaseEffect eff;
+		if (splits->at(splitindex) == "")
+			eff = DiseaseEffect::kNone;
+		else
+			try {
+				eff = static_cast<DiseaseEffect>(std::stoi(splits->at(splitindex)));
+				splitindex++;
+			} catch (std::out_of_range&) {
+				return std::pair<DiseaseEffect, Magnitude>{ DiseaseEffect::kNone, 0.0f };
+			} catch (std::invalid_argument&) {
+				return std::pair<DiseaseEffect, Magnitude>{ DiseaseEffect::kNone, 0.0f };
+			}
+		Magnitude mag;
+		if (splits->at(splitindex) == "")
+			mag = 0.0f;
+		else
+			try {
+				mag = std::stof(splits->at(splitindex));
+				splitindex++;
+			} catch (std::out_of_range&) {
+				return std::pair<DiseaseEffect, Magnitude>{ DiseaseEffect::kNone, 0.0f };
+			} catch (std::invalid_argument&) {
+				return std::pair<DiseaseEffect, Magnitude>{ DiseaseEffect::kNone, 0.0f };
+			}
+		return std::pair<DiseaseEffect, Magnitude>(eff, mag);
+	};
+
+	auto ParseSpreading = [&splits, &splitindex, &file, &tmp]() {
+		float chance, points;
+		if (splits->at(splitindex) == "")
+			chance = 0.0f;
+		else
+			try {
+				chance = std::stof(splits->at(splitindex));
+				splitindex++;
+			} catch (std::out_of_range&) {
+				return std::pair<float, float>{ 0.0f, 0.0f };
+			} catch (std::invalid_argument&) {
+				return std::pair<float, float>{ 0.0f, 0.0f };
+			}
+		if (splits->at(splitindex) == "")
+			points = 0.0f;
+		else
+			try {
+				points = std::stof(splits->at(splitindex));
+				splitindex++;
+			} catch (std::out_of_range&) {
+				return std::pair<float, float>{ 0.0f, 0.0f };
+			} catch (std::invalid_argument&) {
+				return std::pair<float, float>{ 0.0f, 0.0f };
+			}
+		return std::pair<float, float>(chance, points);
+	};
+
+	auto ParsePoints = [&splits, &splitindex, &file, &tmp]() {
+		float f;
+		if (splits->at(splitindex) == "")
+			f = 0.0f;
+		else
+			try {
+				f = std::stof(splits->at(splitindex));
+				splitindex++;
+			} catch (std::out_of_range&) {
+				return 0.0f;
+			} catch (std::invalid_argument&) {
+				return 0.0f;
+			}
+		return f;
+	};
+
+	// Effect1
+	stg->_effects.push_back(ParseEffects());
+	// Effect2
+	stg->_effects.push_back(ParseEffects());
+	// Effect3
+	stg->_effects.push_back(ParseEffects());
+	// Effect4
+	stg->_effects.push_back(ParseEffects());
+	// Effect5
+	stg->_effects.push_back(ParseEffects());
+	// Effect6
+	stg->_effects.push_back(ParseEffects());
+	// Effect7
+	stg->_effects.push_back(ParseEffects());
+	// Effect8
+	stg->_effects.push_back(ParseEffects());
+	// Effect9
+	stg->_effects.push_back(ParseEffects());
+
+	// OnHitMelee
+	stg->_spreading[Spreading::kOnHitMelee] = ParseSpreading();
+	// kOnHitRanged
+	stg->_spreading[Spreading::kOnHitRanged] = ParseSpreading();
+	// kOnHitH2H
+	stg->_spreading[Spreading::kOnHitH2H] = ParseSpreading();
+	// kGetHitMelee
+	stg->_spreading[Spreading::kGetHitMelee] = ParseSpreading();
+	// kGetHitH2H
+	stg->_spreading[Spreading::kGetHitH2H] = ParseSpreading();
+	// kAir
+	stg->_spreading[Spreading::kAir] = ParseSpreading();
+	// kParticle
+	stg->_spreading[Spreading::kParticle] = ParseSpreading();
+	// kIntenseCold
+	stg->_spreading[Spreading::kIntenseCold] = ParseSpreading();
+	// kIntenseHeat
+	stg->_spreading[Spreading::kIntenseHeat] = ParseSpreading();
+	// kInAshland
+	stg->_spreading[Spreading::kInAshland] = ParseSpreading();
+	// kInSwamp
+	stg->_spreading[Spreading::kInSwamp] = ParseSpreading();
+	// kInDessert
+	stg->_spreading[Spreading::kInDessert] = ParseSpreading();
+	// kInAshstorm
+	stg->_spreading[Spreading::kInAshstorm] = ParseSpreading();
+	// kInSandstorm
+	stg->_spreading[Spreading::kInSandstorm] = ParseSpreading();
+	// kInBlizzard
+	stg->_spreading[Spreading::kInBlizzard] = ParseSpreading();
+	// kInRain
+	stg->_spreading[Spreading::kInRain] = ParseSpreading();
+	// kIsWindy
+	stg->_spreading[Spreading::kIsWindy] = ParseSpreading();
+	// kIsStormy
+	stg->_spreading[Spreading::kIsStormy] = ParseSpreading();
+	// kIsCold
+	stg->_spreading[Spreading::kIsCold] = ParseSpreading();
+	// kIsHeat
+	stg->_spreading[Spreading::kIsHeat] = ParseSpreading();
+	// kExtremeConditions
+	stg->_spreading[Spreading::kExtremeConditions] = ParseSpreading();
+	// kActionPhysical
+	stg->_spreading[Spreading::kActionPhysical] = std::pair<float, float>{ 100.0f, ParsePoints() };
+	// kActionMagical
+	stg->_spreading[Spreading::kActionMagical] = std::pair<float, float>{ 100.0f, ParsePoints() };
+
+	return { stg, stageid };
+}
+
+std::tuple<std::shared_ptr<Disease>, uint16_t, uint16_t, std::vector<uint16_t>> LoadDisease(std::vector<std::string>* splits, std::string file, std::string tmp)
+{
+	int splitindex = 0; 
+	if (splits->size() < 18) // if there are too few stages
+	{
+		logger::warn("[Settings] [LoadDisease] Not a rule. Expected {} fields, found {}. file: {}, rule:\"{}\"", 18, splits->size(), file, tmp);
+		return {};
+	}
+
+	std::shared_ptr<Disease> dis = std::make_shared<Disease>();
+
+	// get name
+	dis->_name = splits->at(splitindex);
+	splitindex++;
+
+	// get disease
+	uint16_t diseaseind = 0;
+	try
+	{
+		diseaseind = std::stoi(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"Disease\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"Disease\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+	dis->_disease = static_cast<Diseases::Disease>(diseaseind);
+
+	// get disease type
+	try
+	{
+		dis->_type = static_cast<DiseaseType>(std::stoi(splits->at(splitindex), nullptr, 16));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"DiseaseType\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"DiseaseType\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// get valid permanent modifiers
+	try
+	{
+		dis->_validModifiers = std::stoul(splits->at(splitindex), nullptr, 16);
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"PermanentModifiers\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"PermanentModifiers\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// immunity time
+	try
+	{
+		dis->immunityTime = std::stof(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"ImmunityTime\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"ImmunityTime\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// base progression points
+	try
+	{
+		dis->_baseProgressionPoints = std::stof(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"BaseProgressionPoints\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"BaseProgressionPoints\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// base infection reduction points
+	try
+	{
+		dis->_baseInfectionReductionPoints = std::stof(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"BaseInfectionReductionPoints\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"BaseInfectionReductionPoints\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// base infection chance
+	try
+	{
+		dis->_baseInfectionChance = std::stof(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"BaseInfectionChance\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"BaseInfectionChance\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// numstages
+	try
+	{
+		dis->_numstages = std::stoi(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"NumStages\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"NumStages\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// end events
+	try
+	{
+		dis->endevents = std::stoi(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"EndEvents\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"EndEvents\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// get formid
+	RE::FormID endeffect;
+	if (splits->at(splitindex) == "") {
+		endeffect = 0;
+		splitindex++;
+	}
+	else
+		try
+		{
+			endeffect = std::stoul(splits->at(splitindex), nullptr, 16);
+			splitindex++;
+		} catch (std::out_of_range&) {
+			logwarn("[Settings] [LoadDisease] out-of-range expection in field \"EndEffect\". file: {}, rule:\"{}\"", file, tmp);
+			return {};
+		} catch (std::invalid_argument&) {
+			logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"EndEffect\". file: {}, rule:\"{}\"", file, tmp);
+			return {};
+		}
+	// get plugin name
+	std::string pluginname = splits->at(splitindex);
+	splitindex++;
+	if (Utility::ToLower(pluginname) == "settings")
+		pluginname = Settings::PluginName;
+
+	// get endeffect
+	dis->endeffect = Data::GetSingleton()->FindSpell(endeffect, pluginname);
+
+	// get stageinfection
+	uint16_t infectionid;
+	try
+	{
+		infectionid = std::stoi(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"StageInfection\" with argument {}. file: {}, rule:\"{}\"", splits->at(splitindex), file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"StageInfection\" with argument {}. file: {}, rule:\"{}\"", splits->at(splitindex), file, tmp);
+		return {};
+	}
+
+	// get stageincubation
+	uint16_t incubationid;
+	try
+	{
+		incubationid = std::stoi(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"StageIncubation\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"StageIncubation\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// get stage1
+	uint16_t stage1;
+	try {
+		stage1 = std::stoi(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"Stage1\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"Stage1\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// get stage2
+	uint16_t stage2;
+	try {
+		stage2 = std::stoi(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"Stage2\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"Stage2\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// get stage3
+	uint16_t stage3;
+	try {
+		stage3 = std::stoi(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"Stage3\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"Stage3\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	// get stage4
+	uint16_t stage4;
+	try {
+		stage4 = std::stoi(splits->at(splitindex));
+		splitindex++;
+	} catch (std::out_of_range&) {
+		logwarn("[Settings] [LoadDisease] out-of-range expection in field \"Stage4\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	} catch (std::invalid_argument&) {
+		logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"Stage4\". file: {}, rule:\"{}\"", file, tmp);
+		return {};
+	}
+
+	return {
+		dis, infectionid, incubationid, { stage1, stage2, stage3, stage4 }
+	};
+}
+
 void Settings::LoadDistrConfig()
 {
-	LOG_1("{}[Settings] [LoadDistrConfigAlchExt]");
+	LOG_1("{}[Settings] [LoadDistrConfig]");
 	// set to false, to avoid other funcions running stuff on our variables
 	Distribution::initialised = false;
+
+	// find all stage defining files
+
+	std::vector<std::string> rawfilesstages = { R"(Data\SKSE\Plugins\DiseaseOverhaul_Blight_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Common_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Dangerous_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Extreme_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Fever_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Mild_Stages.csv)" };
+
+	std::vector<std::string> filesstages;
+
+	for (const auto& file : rawfilesstages)
+	{
+		auto entry = std::filesystem::directory_entry(std::filesystem::path(file));
+		if (entry.exists() && !entry.path().empty()) {
+			filesstages.push_back(entry.path().string());
+		}
+	}
+
+	// find all disease defining files
+
+	std::vector<std::string> rawfilesdiseases = { R"(Data\SKSE\Plugins\DiseaseOverhaul_Diseases.csv)" };
+
+	std::vector<std::string> filesdiseases;
+
+	for (const auto& file : rawfilesdiseases) {
+		auto entry = std::filesystem::directory_entry(std::filesystem::path(file));
+		if (entry.exists() && !entry.path().empty()) {
+			filesdiseases.push_back(entry.path().string());
+		}
+	}
+
+	// read the disease stages
+
+	int linecount = 0;
+	for (std::string file : filesstages) {
+		linecount = 0;
+		try {
+			std::ifstream infile(file);
+			if (infile.is_open()) {
+				std::string line;
+				while (std::getline(infile, line)) {
+					linecount++;
+					if (linecount == 1) // skip first line since its the header
+						continue;
+
+					std::string tmp = line;
+					// we read another line
+					// check if its empty or with a comment
+					if (line.empty())
+						continue;
+					// remove leading spaces and tabs
+					while (line.length() > 0 && (line[0] == ' ' || line[0] == '\t')) {
+						line = line.substr(1, line.length() - 1);
+					}
+					// check again
+					if (line.length() == 0 || line[0] == ';')
+						continue;
+					// now begin the actual processing
+					std::vector<std::string>* splits = new std::vector<std::string>();
+					// split the string into parts
+					size_t pos = line.find('|');
+					while (pos != std::string::npos) {
+						splits->push_back(line.substr(0, pos));
+						line.erase(0, pos + 1);
+						pos = line.find("|");
+					}
+					if (line.length() != 0)
+						splits->push_back(line);
+					else
+						splits->push_back("");
+					
+					// load the disease stage
+					auto [stg, id] = LoadDiseaseStage(splits, file, tmp);
+					if (stg)
+					{
+						// if the stage returned is valid, save it to data
+						Data::GetSingleton()->AddDiseaseStage(stg, id);
+
+						LOGLE1_1("[Settings] [LoadDistrRules] loaded DiseaseStage: {}", UtilityAlch::ToString(stg));
+						loginfo("DiseaseStage+");
+					} else
+						loginfo("DiseaseStage");
+
+					delete splits;
+				}
+			} else {
+				logger::warn("[Settings] [LoadDistrConfig] file {} couldn't be read successfully", file);
+			}
+		} catch (std::exception&) {
+			logger::warn("[Settings] [LoadDistrConfig] file {} couldn't be read successfully due to an error", file);
+		}
+	}
+
+	// read the diseases
+
+	linecount = 0;
+	for (std::string file : filesdiseases) {
+		linecount = 0;
+		try {
+			std::ifstream infile(file);
+			if (infile.is_open()) {
+				std::string line;
+				while (std::getline(infile, line)) {
+					linecount++;
+					if (linecount == 1)  // skip first line since its the header
+						continue;
+
+					std::string tmp = line;
+					// we read another line
+					// check if its empty or with a comment
+					if (line.empty())
+						continue;
+					// remove leading spaces and tabs
+					while (line.length() > 0 && (line[0] == ' ' || line[0] == '\t')) {
+						line = line.substr(1, line.length() - 1);
+					}
+					// check again
+					if (line.length() == 0 || line[0] == ';')
+						continue;
+					// now begin the actual processing
+					std::vector<std::string>* splits = new std::vector<std::string>();
+					// split the string into parts
+					size_t pos = line.find('|');
+					while (pos != std::string::npos) {
+						splits->push_back(line.substr(0, pos));
+						line.erase(0, pos + 1);
+						pos = line.find("|");
+					}
+					if (line.length() != 0)
+						splits->push_back(line);
+					else
+						splits->push_back("");
+
+					auto [disease, infectionid, incubationid, stageids] = LoadDisease(splits, file, tmp);
+					if (disease)
+					{
+						Data::GetSingleton()->InitDisease(disease, infectionid, incubationid, stageids);
+
+						LOGLE1_1("[Settings] [LoadDistrRules] loaded Disease: {}", UtilityAlch::ToString(disease));
+						loginfo("Disease+");
+					} else
+						loginfo("Disease");
+
+					delete splits;
+				}
+			} else {
+				logger::warn("[Settings] [LoadDistrConfig] file {} couldn't be read successfully", file);
+			}
+		} catch (std::exception&) {
+			logger::warn("[Settings] [LoadDistrConfig] file {} couldn't be read successfully due to an error", file);
+		}
+	}
+
+
 
 	std::vector<std::string> files;
 	auto constexpr folder = R"(Data\SKSE\Plugins\)";
 	for (const auto& entry : std::filesystem::directory_iterator(folder)) {
 		if (entry.exists() && !entry.path().empty() && entry.path().extension() == ".ini") {
-			if (auto path = entry.path().string(); path.rfind("AlchExt_DIST") != std::string::npos) {
+			if (auto path = entry.path().string(); path.rfind("DO_DIST") != std::string::npos) {
 				files.push_back(path);
-				logger::info("[SETTINGS] [LoadDistrRulesAlchExt] found Distribution configuration file: {}", entry.path().filename().string());
+				logger::info("[SETTINGS] [LoadDistrConfig] found Distribution configuration file: {}", entry.path().filename().string());
 			}
 		}
 	}
 	if (files.empty()) {
-		logger::info("[SETTINGS] [LoadDistrRulesAlchExt] No Distribution files were found");
+		logger::info("[SETTINGS] [LoadDistrConfig] No Distribution files were found");
 	}
 	// init datahandler
 	auto datahandler = RE::TESDataHandler::GetSingleton();
@@ -2278,7 +2904,7 @@ void Settings::LoadDistrConfig()
 					int splitindex = 0;
 					// check wether we actually have a rule
 					if (splits->size() < 3) {  // why 3? Cause first two fields are RuleVersion and RuleType and we don't accept empty rules.
-						logger::warn("[Settings] [LoadDistrRulesAlchExt] Not a rule. file: {}, rule:\"{}\"", file, tmp);
+						logger::warn("[Settings] [LoadDistrConfig] Not a rule. file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						continue;
 					}
@@ -2288,11 +2914,11 @@ void Settings::LoadDistrConfig()
 						ruleVersion = std::stoi(splits->at(splitindex));
 						splitindex++;
 					} catch (std::out_of_range&) {
-						logger::warn("[Settings] [LoadDistrRulesAlchExt] out-of-range expection in field \"RuleVersion\". file: {}, rule:\"{}\"", file, tmp);
+						logger::warn("[Settings] [LoadDistrConfig] out-of-range expection in field \"RuleVersion\". file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						continue;
 					} catch (std::invalid_argument&) {
-						logger::warn("[Settings] [LoadDistrRulesAlchExt] invalid-argument expection in field \"RuleVersion\". file: {}, rule:\"{}\"", file, tmp);
+						logger::warn("[Settings] [LoadDistrConfig] invalid-argument expection in field \"RuleVersion\". file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						continue;
 					}
@@ -2302,11 +2928,11 @@ void Settings::LoadDistrConfig()
 						ruleType = std::stoi(splits->at(splitindex));
 						splitindex++;
 					} catch (std::out_of_range&) {
-						logger::warn("[Settings] [LoadDistrRulesAlchExt] out-of-range expection in field \"RuleType\". file: {}, rule:\"{}\"", file, tmp);
+						logger::warn("[Settings] [LoadDistrConfig] out-of-range expection in field \"RuleType\". file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						continue;
 					} catch (std::invalid_argument&) {
-						logger::warn("[Settings] [LoadDistrRulesAlchExt] invalid-argument expection in field \"RuleType\". file: {}, rule:\"{}\"", file, tmp);
+						logger::warn("[Settings] [LoadDistrConfig] invalid-argument expection in field \"RuleType\". file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						continue;
 					}
@@ -2346,7 +2972,7 @@ void Settings::LoadDistrConfig()
 							case 8:  // custom object distribution
 								{
 									if (splits->size() != 4) {
-										logger::warn("[Settings] [LoadDistrRulesAlchExt] rule has wrong number of fields, expected 4. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										logger::warn("[Settings] [LoadDistrConfig] rule has wrong number of fields, expected 4. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										continue;
 									}
 
@@ -2708,24 +3334,24 @@ void Settings::LoadDistrConfig()
 								}
 								break;
 							default:
-								logger::warn("[Settings] [LoadDistrRulesAlchExt] Rule type does not exist. file: {}, rule:\"{}\"", file, tmp);
+								logger::warn("[Settings] [LoadDistrConfig] Rule type does not exist. file: {}, rule:\"{}\"", file, tmp);
 								delete splits;
 								break;
 							}
 						}
 						break;
 					default:
-						logger::warn("[Settings] [LoadDistrRulesAlchExt] Rule version does not exist. file: {}, rule:\"{}\"", file, tmp);
+						logger::warn("[Settings] [LoadDistrConfig] Rule version does not exist. file: {}, rule:\"{}\"", file, tmp);
 						delete splits;
 						break;
 					}
 				}
 			} else {
-				logger::warn("[Settings] [LoadDistrRulesAlchExt] file {} couldn't be read successfully", file);
+				logger::warn("[Settings] [LoadDistrConfig] file {} couldn't be read successfully", file);
 			}
 
 		} catch (std::exception&) {
-			logger::warn("[Settings] [LoadDistrRulesAlchExt] file {} couldn't be read successfully due to an error", file);
+			logger::warn("[Settings] [LoadDistrConfig] file {} couldn't be read successfully due to an error", file);
 		}
 	}
 
@@ -2733,7 +3359,7 @@ void Settings::LoadDistrConfig()
 
 
 	if (Logging::EnableLog) {
-		//logger::info("[Settings] [LoadDistrRulesAlchExt] Number of Rules: {}", Distribution::rules()->size());
+		//logger::info("[Settings] [LoadDistrConfig] Number of Rules: {}", Distribution::rules()->size());
 	}
 }
 

@@ -139,7 +139,7 @@ float ActorInfo::IgnoresDisease()
 			return 1.0f;
 		if (Settings::Disease::_ignoreDiseaseResistance)
 			return 0.0f;
-		float resistance = _actor->GetActorValue(RE::ActorValue::kResistDisease);
+		float resistance = _actor->AsActorValueOwner()->GetActorValue(RE::ActorValue::kResistDisease);
 		if (_vampire && Settings::Disease::_ignoreVampireBaseImmunity)
 			resistance -= 100;
 		if (_werewolf && Settings::Disease::_ignoreWerewolfBaseImmunity)

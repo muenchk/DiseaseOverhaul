@@ -4,6 +4,7 @@ buildAE353/
 buildSE/
 buildAE/
 .vs/
+.vscode/
 src/.vs/
 src/.vscode
 src/out

@@ -68,7 +68,7 @@ bool DiseaseStats::ProgressDisease(RE::Actor* actor, Diseases::Disease value, fl
 	RE::ActorHandle achandle = actor->GetHandle();
 
 	// do actual work
-	Disease* dis = DisSta::data->GetDisease(value);
+	std::shared_ptr<Disease> dis = DisSta::data->GetDisease(value);
 	dinfo->advPoints += points;
 	switch (dinfo->status) {
 	case DiseaseStatus::kInfection:
@@ -148,7 +148,7 @@ bool DiseaseStats::ProgressDisease(RE::Actor* actor, Diseases::Disease value, fl
 				// advance to next stage
 				// remove last effect
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					actor->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
+					actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 				if (dinfo->stage == 0)  //we are in incubation stage
 				{
 					// we are allowed to jump more than one stage here, straight up to max stage 3 whch is idx [2]
@@ -181,13 +181,13 @@ bool DiseaseStats::ProgressDisease(RE::Actor* actor, Diseases::Disease value, fl
 				dinfo->permanentModifiersPoints = 0;
 				// remove effect
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					actor->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
+					actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 			} else {
 				LOG_4("{}[DiseaseStats] [ProgressDisease] devance");
 				// we just regress one stage
 				// remove last effect
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					actor->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
+					actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 				dinfo->stage--;
 				dinfo->advPoints = (float)dis->_stages[dinfo->stage]->_advancementThreshold;
 				// apply effect if there is one
@@ -211,13 +211,13 @@ bool DiseaseStats::ProgressDisease(RE::Actor* actor, Diseases::Disease value, fl
 				dinfo->permanentModifiersPoints = 0;
 				// remove effect
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					actor->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
+					actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 			} else {
 				LOG_4("{}[DiseaseStats] [ProgressDisease] devance");
 				// we just regress one stage
 				// remove last effect
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					actor->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
+					actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 				dinfo->stage--;
 				dinfo->advPoints = (float)dis->_stages[dinfo->stage]->_advancementThreshold;
 				// apply effect if there is one
@@ -259,7 +259,7 @@ bool DiseaseStats::ForceIncreaseStage(RE::Actor* actor, Diseases::Disease value)
 	RE::ActorHandle achandle = actor->GetHandle();
 
 	// do actual work
-	Disease* dis = DisSta::data->GetDisease(value);
+	std::shared_ptr<Disease> dis = DisSta::data->GetDisease(value);
 	switch (dinfo->status) {
 	case DiseaseStatus::kInfection:
 		LOG_4("{}[DiseaseStats] [ForceIncreaseStage] Infection");
@@ -329,7 +329,7 @@ bool DiseaseStats::ForceIncreaseStage(RE::Actor* actor, Diseases::Disease value)
 			// advance to next stage
 			// remove last effect
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
-				actor->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
+				actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 			dinfo->advPoints = 0;
 			dinfo->stage++;
 			dinfo->earliestAdvancement = currentgameday + dis->_stages[dinfo->stage]->_advancementTime;
@@ -373,7 +373,7 @@ void DiseaseStats::ForceDecreaseStage(RE::Actor* actor, Diseases::Disease value)
 	RE::ActorHandle achandle = actor->GetHandle();
 
 	// do actual work
-	Disease* dis = DisSta::data->GetDisease(value);
+	std::shared_ptr<Disease> dis = DisSta::data->GetDisease(value);
 	switch (dinfo->status) {
 	case DiseaseStatus::kInfection:
 		LOG_4("{}[DiseaseStats] [ForceDecreaseStage] Infection");
@@ -407,13 +407,13 @@ void DiseaseStats::ForceDecreaseStage(RE::Actor* actor, Diseases::Disease value)
 			dinfo->permanentModifiersPoints = 0;
 			// remove effect
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
-				actor->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
+				actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 		} else {
 			LOG_4("{}[DiseaseStats] [ForceDecreaseStage] devance");
 			// we just regress one stage
 			// remove last effect
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
-				actor->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
+				actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 			dinfo->stage--;
 			dinfo->advPoints = (float)dis->_stages[dinfo->stage]->_advancementThreshold;
 			// apply effect if there is one

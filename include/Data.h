@@ -36,11 +36,7 @@ private:
 	/// <summary>
 	/// array that contains all diseases
 	/// </summary>
-	Disease* diseases[Diseases::kMaxValue];
-	/// <summary>
-	/// dummy disease that helps avoid nullptr dereferences
-	/// </summary>
-	Disease dummyDisease;
+	std::shared_ptr<Disease> diseases[Diseases::kMaxValue];
 
 	/// <summary>
 	/// map that contains information about game cells loaded during runtime
@@ -50,6 +46,11 @@ private:
 	/// map that contains information about game weathers loaded during runtime
 	/// </summary>
 	std::unordered_map<uint32_t, std::shared_ptr<WeatherInfo>> weatherinfoMap;
+
+	/// <summary>
+	/// Map that contains all disease stages
+	/// </summary>
+	std::unordered_map<uint16_t, std::shared_ptr<DiseaseStage>> diseaseStagesMap;
 
 public:
 	/// <summary>
@@ -223,6 +224,14 @@ public:
 	void DeleteFormCustom(RE::FormID actorid);
 
 	/// <summary>
+	/// Returns the TESSpellitem associated with the formid
+	/// </summary>
+	/// <param name="formid"></param>
+	/// <param name="pluginname"></param>
+	/// <returns></returns>
+	RE::SpellItem* FindSpell(uint32_t formid, std::string pluginname);
+
+	/// <summary>
 	/// Returns the dosage of the given poison that is to be applied
 	/// </summary>
 	/// <param name="poison"></param>
@@ -242,7 +251,11 @@ public:
 	/// <returns></returns>
 	std::shared_ptr<WeatherInfo> FindWeather(RE::TESWeather* weather);
 
-	Disease* GetDisease(Diseases::Disease);
+	void AddDiseaseStage(std::shared_ptr<DiseaseStage> stage, uint16_t stageid);
+	void InitDisease(std::shared_ptr<Disease> disease, uint16_t stageinfection, uint16_t stageincubation, std::vector<uint16_t> stageids);
+	void ResetDiseases();
+
+	std::shared_ptr<Disease> GetDisease(Diseases::Disease);
 
 	std::vector<ActorInfo*> AirInfections(RE::TESObjectCELL* cell);
 	std::vector<ActorInfo*> ParticleInfections(RE::TESObjectCELL* cell);

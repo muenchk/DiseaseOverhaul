@@ -58,7 +58,7 @@ public:
 		return celltype & CellInfoType::kDessert |
 				celltype & CellInfoType::kIceland |
 				celltype & CellInfoType::kIntenseCold |
-				celltype & CellInfoType::kIntenseHeat |;
+				celltype & CellInfoType::kIntenseHeat;
 	}
 
 	std::vector<Diseases::Disease> GetPossibleInfections();

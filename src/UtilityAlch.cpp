@@ -93,3 +93,13 @@ std::string UtilityAlch::ToString(Diseases::Disease value)
 		return "Unknown";
 	}
 }
+
+std::string UtilityAlch::ToString(std::shared_ptr<Disease>& disease)
+{
+	return std::string("[") + typeid(Disease).name() + "<" + disease->_name + "><Disease:" + ToString(disease->_disease) + "><Type:" + std::to_string(static_cast<int>(disease->_type)) + "><Stages" + std::to_string(disease->_numstages) + "><StageInfec:" + disease->_stageInfection->_specifier + "><StageIncub:" + disease->_stages[0]->_specifier + "><Stage1:" + disease->_stages[1]->_specifier + "><Stage2:" + disease->_stages[2]->_specifier + "><Stage3:" + disease->_stages[3]->_specifier + "><Stage4:" + disease->_stages[4]->_specifier + "><ProgressionPoints:" + std::to_string(disease->_baseProgressionPoints) + "><InfectionReduction:" + std::to_string(disease->_baseInfectionReductionPoints) + "><InfectionChance:" + std::to_string(disease->_baseInfectionChance) + "><Modifiers" + std::to_string(disease->_validModifiers) + "><ImmunityTime" + std::to_string(disease->immunityTime) + "><Effect:" + PrintForm(disease->endeffect) + "><EndEvents" + std::to_string(disease->endevents) + ">]";
+}
+
+std::string UtilityAlch::ToString(std::shared_ptr<DiseaseStage>& stage)
+{
+	return std::string("[") + typeid(DiseaseStage).name() + "<" + stage->_specifier + "><AdvancementTreshold:" + std::to_string(stage->_advancementThreshold) + "><AdvancementTime:" + std::to_string(stage->_advancementTime) + "><Infectivity:" + std::to_string(static_cast<int>(stage->_infectivity)) + "><Effect:" + PrintForm(stage->effect) + ">]";
+ }

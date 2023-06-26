@@ -457,6 +457,15 @@ RE::AlchemyItem* Data::FindAlchemyItem(uint32_t formid, std::string pluginname)
 	return nullptr;
 }
 
+RE::SpellItem* Data::FindSpell(uint32_t formid, std::string pluginname)
+{
+	RE::TESForm* form = Utility::GetTESForm(datahandler, formid, pluginname, "");
+	if (form != nullptr) {
+		return form->As<RE::SpellItem>();
+	}
+	return nullptr;
+}
+
 void Data::DeleteFormCustom(RE::FormID formid)
 {
 	lockdata.acquire();
@@ -523,12 +532,12 @@ std::shared_ptr<CellInfo> Data::FindCell(RE::TESObjectCELL* cell)
 		}
 	}
 	RE::FormID formid = 0;
-	if (cell->cellLand &&
-		cell->cellLand->loadedData) {
+	if (cell->GetRuntimeData().cellLand &&
+		cell->GetRuntimeData().cellLand->loadedData) {
 		for (int i = 0; i < 4; i++) {
-			if (cell->cellLand->loadedData->defQuadTextures[i] &&
-				cell->cellLand->loadedData->defQuadTextures[i]->textureSet) {
-				formid = cell->cellLand->loadedData->defQuadTextures[i]->textureSet->GetFormID();
+			if (cell->GetRuntimeData().cellLand->loadedData->defQuadTextures[i] &&
+				cell->GetRuntimeData().cellLand->loadedData->defQuadTextures[i]->textureSet) {
+				formid = cell->GetRuntimeData().cellLand->loadedData->defQuadTextures[i]->textureSet->GetFormID();
 				auto itra = textureMap.find(formid);
 				if (itra != textureMap.end()) {
 					if (itra->second) {
@@ -710,10 +719,10 @@ bool Data::IsBlizzard(RE::TESWeather* weather)
 	return false;
 }
 
-Disease* Data::GetDisease(Diseases::Disease value)
+std::shared_ptr<Disease> Data::GetDisease(Diseases::Disease value)
 {
 	if (diseases[value] == nullptr) {
-		return &dummyDisease;
+		return {};
 	}
 	return diseases[value];
 }
@@ -721,17 +730,12 @@ Disease* Data::GetDisease(Diseases::Disease value)
 void Data::InitDiseases()
 {
 	auto datahandler = RE::TESDataHandler::GetSingleton();
-	DiseaseStage* stage = nullptr;
-	std::pair<int, float> tint; 
+	std::shared_ptr<DiseaseStage> stage = nullptr;
+	std::pair<float, float> tint; 
 	RE::TESForm* tmp = nullptr;
 	RE::SpellItem* spell = nullptr;
 	for (int i = 0; i < Diseases::kMaxValue; i++) {
-		if (diseases[i] != nullptr)
-		{
-			delete diseases[i];
-			diseases[i] = nullptr;
-		}
-		diseases[i] = new Disease();
+		diseases[i] = {};
 	}
 	// Ash Woe Blight
 	{
@@ -743,27 +747,27 @@ void Data::InitDiseases()
 		diseases[Diseases::kAshWoeBlight]->_baseInfectionReductionPoints = 1;
 		diseases[Diseases::kAshWoeBlight]->_baseInfectionChance = 3;
 		diseases[Diseases::kAshWoeBlight]->_validModifiers = PermanentModifiers::kPotionOfCureBlight | PermanentModifiers::kSpellOfCureBlight | PermanentModifiers::kShrine;
-		diseases[Diseases::kAshWoeBlight]->_stages = new DiseaseStage*[diseases[Diseases::kAshWoeBlight]->_numstages + 1];
+		diseases[Diseases::kAshWoeBlight]->_stages = new std::shared_ptr<DiseaseStage>[diseases[Diseases::kAshWoeBlight]->_numstages + 1];
 
 		auto stageinfection = diseases[Diseases::kAshWoeBlight]->_stageInfection;
-		stageinfection->_spreading[Spreading::kOnHitMelee] = { 15, 50.0f };
-		stageinfection->_spreading[Spreading::kOnHitRanged] = { 12, 50.0f };
-		stageinfection->_spreading[Spreading::kOnHitH2H] = { 17, 50.0f };
-		stageinfection->_spreading[Spreading::kAir] = { 0, 0.0f };
-		stageinfection->_spreading[Spreading::kParticle] = { 6, 1.0f };
-		stageinfection->_spreading[Spreading::kIntenseCold] = { 0, 0.0f };
-		stageinfection->_spreading[Spreading::kIntenseHeat] = { 0, 0.0f };
-		stageinfection->_spreading[Spreading::kInAshland] = { 1, 1.0f };
-		stageinfection->_spreading[Spreading::kInSwamp] = { 0, 0.0f };
-		stageinfection->_spreading[Spreading::kInDessert] = { 0, 0.0f };
-		stageinfection->_spreading[Spreading::kInAshstorm] = { 10, 1.0f };
-		stageinfection->_spreading[Spreading::kInSandstorm] = { 0, 0.0f };
-		stageinfection->_spreading[Spreading::kInBlizzard] = { 0, 0.0f };
-		stageinfection->_spreading[Spreading::kInRain] = { 0, 0.0f };
-		stageinfection->_spreading[Spreading::kIsWindy] = { 0, 0.0f };
-		stageinfection->_spreading[Spreading::kIsStormy] = { 0, 0.0f };
-		stageinfection->_spreading[Spreading::kIsCold] = { 0, 0.0f };
-		stageinfection->_spreading[Spreading::kIsHeat] = { 0, 0.0f };
+		stageinfection->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
+		stageinfection->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
+		stageinfection->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
+		stageinfection->_spreading[Spreading::kAir] = { 0.0f, 0.0f };
+		stageinfection->_spreading[Spreading::kParticle] = { 6.0f, 1.0f };
+		stageinfection->_spreading[Spreading::kIntenseCold] = { 0.0f, 0.0f };
+		stageinfection->_spreading[Spreading::kIntenseHeat] = { 0.0f, 0.0f };
+		stageinfection->_spreading[Spreading::kInAshland] = { 1.0f, 1.0f };
+		stageinfection->_spreading[Spreading::kInSwamp] = { 0.0f, 0.0f };
+		stageinfection->_spreading[Spreading::kInDessert] = { 0.0f, 0.0f };
+		stageinfection->_spreading[Spreading::kInAshstorm] = { 10.0f, 1.0f };
+		stageinfection->_spreading[Spreading::kInSandstorm] = { 0.0f, 0.0f };
+		stageinfection->_spreading[Spreading::kInBlizzard] = { 0.0f, 0.0f };
+		stageinfection->_spreading[Spreading::kInRain] = { 0.0f, 0.0f };
+		stageinfection->_spreading[Spreading::kIsWindy] = { 0.0f, 0.0f };
+		stageinfection->_spreading[Spreading::kIsStormy] = { 0.0f, 0.0f };
+		stageinfection->_spreading[Spreading::kIsCold] = { 0.0f, 0.0f };
+		stageinfection->_spreading[Spreading::kIsHeat] = { 0.0f, 0.0f };
 		// infection
 		{
 			diseases[Diseases::kAshWoeBlight]->_stageInfection->_advancementThreshold = 100;
@@ -772,38 +776,38 @@ void Data::InitDiseases()
 		}
 		// incubation
 		{
-			stage = new DiseaseStage();
+			stage = std::make_shared<DiseaseStage>();
 			stage->_advancementThreshold = 2160;
 			stage->_advancementTime = 3.0;
 			stage->_infectivity = Infectivity::kLow;
 			// ashstorm
-			stage->_spreading[Spreading::kInAshstorm] = { 100 /*guarantied chance*/, 6.0f /*points per tick*/ };
+			stage->_spreading[Spreading::kInAshstorm] = { 100.0f /*guarantied chance*/, 6.0f /*points per tick*/ };
 			// ashland
-			stage->_spreading[Spreading::kInAshland] = { 100, 1.0f };
-			stage->_spreading[Spreading::kParticle] = { 6, 1.0f };
-			stage->_spreading[Spreading::kOnHitMelee] = { 15, 50.0f };
-			stage->_spreading[Spreading::kOnHitRanged] = { 12, 50.0f };
-			stage->_spreading[Spreading::kOnHitH2H] = { 17, 50.0f };
+			stage->_spreading[Spreading::kInAshland] = { 100.0f, 1.0f };
+			stage->_spreading[Spreading::kParticle] = { 6.0f, 1.0f };
+			stage->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
+			stage->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
+			stage->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
 			stage->effect = nullptr;
 			diseases[Diseases::kAshWoeBlight]->_stages[0] = stage;
 		}
 		// stage 1
 		{
-			stage = new DiseaseStage();
+			stage = std::make_shared<DiseaseStage>();
 			stage->_advancementThreshold = 2160;
 			stage->_advancementTime = 3.0;
 			stage->_infectivity = Infectivity::kNormal;
 			// ashstorm
-			tint = { 100 /*guarantied chance*/, 8.0f /*points per tick*/ };
+			tint = { 100.0f /*guarantied chance*/, 8.0f /*points per tick*/ };
 			stage->_spreading[Spreading::kInAshstorm] = tint;
 			// ashland
-			tint = { 100, 1.0f };
+			tint = { 100.0f, 1.0f };
 			stage->_spreading[Spreading::kInAshland] = tint;
-			tint = { 6, 1.0f };
+			tint = { 6.0f, 1.0f };
 			stage->_spreading[Spreading::kParticle] = tint;
-			stage->_spreading[Spreading::kOnHitMelee] = { 15, 50.0f };
-			stage->_spreading[Spreading::kOnHitRanged] = { 12, 50.0f };
-			stage->_spreading[Spreading::kOnHitH2H] = { 17, 50.0f };
+			stage->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
+			stage->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
+			stage->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
 			if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x5907, Settings::PluginName, "")) != nullptr) {
 				if ((spell = tmp->As<RE::SpellItem>()) != nullptr)
 					stage->effect = spell;
@@ -812,21 +816,21 @@ void Data::InitDiseases()
 		}
 		// stage 2
 		{
-			stage = new DiseaseStage();
+			stage = std::make_shared<DiseaseStage>();
 			stage->_advancementThreshold = 3600;
 			stage->_advancementTime = 5.0;
 			stage->_infectivity = Infectivity::kHigher;
 			// ashstorm
-			tint = { 100 /*guarantied chance*/, 10.0f /*points per tick*/ };
+			tint = { 100.0f /*guarantied chance*/, 10.0f /*points per tick*/ };
 			stage->_spreading[Spreading::kInAshstorm] = tint;
 			// ashland
-			tint = { 100, 1.5f };
+			tint = { 100.0f, 1.5f };
 			stage->_spreading[Spreading::kInAshland] = tint;
-			tint = { 6, 1.0f };
+			tint = { 6.0f, 1.0f };
 			stage->_spreading[Spreading::kParticle] = tint;
-			stage->_spreading[Spreading::kOnHitMelee] = { 15, 50.0f };
-			stage->_spreading[Spreading::kOnHitRanged] = { 12, 50.0f };
-			stage->_spreading[Spreading::kOnHitH2H] = { 17, 50.0f };
+			stage->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
+			stage->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
+			stage->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
 			// AEXTDiseaseAshWoeBlight2
 			if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x5908, Settings::PluginName, "")) != nullptr) {
 				if ((spell = tmp->As<RE::SpellItem>()) != nullptr)
@@ -836,21 +840,21 @@ void Data::InitDiseases()
 		}
 		// stage 3
 		{
-			stage = new DiseaseStage();
+			stage = std::make_shared<DiseaseStage>();
 			stage->_advancementThreshold = 3600;
 			stage->_advancementTime = 5.0;
 			stage->_infectivity = Infectivity::kHigher;
 			// ashstorm
-			tint = { 100 /*guarantied chance*/, 12.0f /*points per tick*/ };
+			tint = { 100.0f /*guarantied chance*/, 12.0f /*points per tick*/ };
 			stage->_spreading[Spreading::kInAshstorm] = tint;
 			// ashland
-			tint = { 100, 1.5f };
+			tint = { 100.0f, 1.5f };
 			stage->_spreading[Spreading::kInAshland] = tint;
-			tint = { 6, 1.0f };
+			tint = { 6.0f, 1.0f };
 			stage->_spreading[Spreading::kParticle] = tint;
-			stage->_spreading[Spreading::kOnHitMelee] = { 15, 50.0f };
-			stage->_spreading[Spreading::kOnHitRanged] = { 12, 50.0f };
-			stage->_spreading[Spreading::kOnHitH2H] = { 17, 50.0f };
+			stage->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
+			stage->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
+			stage->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
 			// AEXTDiseaseAshWoeBlight3
 			if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x5909, Settings::PluginName, "")) != nullptr) {
 				if ((spell = tmp->As<RE::SpellItem>()) != nullptr)
@@ -860,21 +864,21 @@ void Data::InitDiseases()
 		}
 		// stage 4
 		{
-			stage = new DiseaseStage();
+			stage = std::make_shared<DiseaseStage>();
 			stage->_advancementThreshold = 5040;
 			stage->_advancementTime = 7.0;
 			stage->_infectivity = Infectivity::kHigher;
 			// ashstorm
-			tint = { 100 /*guarantied chance*/, 15.0f /*points per tick*/ };
+			tint = { 100.0f /*guarantied chance*/, 15.0f /*points per tick*/ };
 			stage->_spreading[Spreading::kInAshstorm] = tint;
 			// ashland
-			tint = { 100, 2.0f };
+			tint = { 100.0f, 2.0f };
 			stage->_spreading[Spreading::kInAshland] = tint;
-			tint = { 6, 1.0f };
+			tint = { 6.0f, 1.0f };
 			stage->_spreading[Spreading::kParticle] = tint;
-			stage->_spreading[Spreading::kOnHitMelee] = { 15, 50.0f };
-			stage->_spreading[Spreading::kOnHitRanged] = { 12, 50.0f };
-			stage->_spreading[Spreading::kOnHitH2H] = { 17, 50.0f };
+			stage->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
+			stage->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
+			stage->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
 			// AEXTDiseaseAshWoeBlight3
 			if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x590A, Settings::PluginName, "")) != nullptr) {
 				if ((spell = tmp->As<RE::SpellItem>()) != nullptr)
@@ -1099,4 +1103,53 @@ int Data::GetPoisonDosage(RE::AlchemyItem* poison)
 		}
 	}
 	return Settings::NUPSettings::Poisons::_Dosage;
+}
+
+void Data::AddDiseaseStage(std::shared_ptr<DiseaseStage> stage, uint16_t stageid)
+{
+	diseaseStagesMap.insert_or_assign(stageid, stage);
+}
+
+void Data::InitDisease(std::shared_ptr<Disease> disease, uint16_t stageinfection, uint16_t stageincubation, std::vector<uint16_t> stageids)
+{
+	auto itr = diseaseStagesMap.find(stageinfection);
+	if (itr != diseaseStagesMap.end())
+	{
+		disease->_stageInfection = itr->second;
+	}
+
+	// init stages array
+	disease->_stages = new std::shared_ptr<DiseaseStage>[disease->_numstages + 1];
+
+	itr = diseaseStagesMap.find(stageincubation);
+	if (itr != diseaseStagesMap.end())
+	{
+		disease->_stages[0] = itr->second;
+	}
+	for (int i = 0; i < stageids.size(); i++)
+	{
+		itr = diseaseStagesMap.find(stageids[i]);
+		if (itr != diseaseStagesMap.end())
+		{
+			disease->_stages[i + 1] = itr->second;
+		}
+	}
+
+	diseases[disease->_disease] = disease;
+}
+
+void Data::ResetDiseases()
+{
+	for (int i = 0; i < Diseases::kMaxValue; i++)
+	{
+		diseases[i]->_stageInfection = {};
+		for (int c = 0; c <= diseases[i]->_numstages; c++)
+		{
+			diseases[i]->_stages[c] = {};
+		}
+		delete diseases[i]->_stages;
+		diseases[i] = {};
+	}
+
+	diseaseStagesMap.clear();
 }

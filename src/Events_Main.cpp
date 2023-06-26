@@ -80,15 +80,13 @@ namespace Events
 				while (citer != cellist.end()) {
 					cinfo = *citer;
 					// first get all actors that shall be handled in player cell
-					auto iter = cinfo->cell->references.begin();
-					while (iter != cinfo->cell->references.end()) {
-						if (iter->get()) {
-							actor = iter->get()->As<RE::Actor>();
+					for (auto& ptr : cinfo->cell->GetRuntimeData().references) {
+						if (ptr.get()) {
+							actor = ptr.get()->As<RE::Actor>();
 							if (actor) {
 								actors.push_back(data->FindActor(actor));
 							}
 						}
-						iter++;
 					}
 					citer++;
 				}
@@ -142,12 +140,14 @@ namespace Events
 					for (int i = 0; i < Diseases::kMaxValue; i++) {
 						// get disease
 						Diseases::Disease disval = static_cast<Diseases::Disease>(i);
-						Disease* dis = data->GetDisease(disval);
+						std::shared_ptr<Disease> dis = data->GetDisease(disval);
+						if (!dis)
+							continue;
 						if (dis->ParticleSpread() == false) {
 							//LOG1_1("{}[Events] [HandleEvents] Disease does not spread via particles: {}", UtilityAlch::ToString(disval));
 							continue;  // disease does not spread via particles
 						}
-						DiseaseStage* stage = nullptr;
+						std::shared_ptr<DiseaseStage> stage = nullptr;
 
 						// deprecated
 						/*if (particlehandling) {
@@ -282,8 +282,10 @@ namespace Events
 					for (int i = 0; i < Diseases::kMaxValue; i++) {
 						// get disease
 						Diseases::Disease disval = static_cast<Diseases::Disease>(i);
-						Disease* dis = data->GetDisease(disval);
-						DiseaseStage* stage = nullptr;
+						std::shared_ptr<Disease> dis = data->GetDisease(disval);
+						if (!dis)
+							continue;
+						std::shared_ptr<DiseaseStage> stage = nullptr;
 						// iterate over infected for disease
 						for (int c = 0; c < infected[i].size(); c++) {
 							auto itr = cellmates.find(infected[i][c]->GetFormID());
@@ -342,10 +344,12 @@ namespace Events
 				for (int i = 0; i < Diseases::kMaxValue; i++) {
 					// get disease
 					Diseases::Disease disval = static_cast<Diseases::Disease>(i);
-					Disease* dis = data->GetDisease(disval);
+					std::shared_ptr<Disease> dis = data->GetDisease(disval);
+					if (!dis)
+						continue;
 					if (dis->AirSpread() == false)
 						continue;  // disease does not spread via air
-					DiseaseStage* stage = nullptr;
+					std::shared_ptr<DiseaseStage> stage = nullptr;
 					DiseaseInfo* dinfo = nullptr;
 					// iterate actors
 					for (int x = 0; x < actors.size(); x++) {

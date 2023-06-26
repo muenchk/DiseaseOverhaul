@@ -584,7 +584,7 @@ public:
 		/// <summary>
 		/// [Settings] tick length in game time
 		/// </summary>
-		static inline float _ticklength = 0.005f;
+		static inline float _ticklength = 0.0001f;  //0.005f;
 	};
 
 	struct Debug
@@ -644,8 +644,14 @@ public:
 		static inline bool _ignoreVampireBaseImmunity = false;   // ignores the vampires base immunity to diseases
 		static inline bool _ignoreWerewolfBaseImmunity = false;  // ignores the werewolfs base immunity to diseases
 		static inline bool _ignoreDiseaseResistance = false;     // ignores all disease resistance and immunities
-		static inline float _particleRange = 150.0f;
+		static inline float _particleRange = 500.0f;             //150.0f;
 		static inline bool _ignoreTimeAdvancementConstraint = false;  // ignores the time constraint on advancing stages
+	};
+
+	struct Infection
+	{
+		static inline bool _AllowMultipleDiseases = true; // whether to allow an actor to have mutiple infections at the same time
+		static inline bool _ShowInfectionStatus = true; // wether to show that an actor is infcted in their name
 	};
 
 	class Interfaces

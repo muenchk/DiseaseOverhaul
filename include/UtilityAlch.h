@@ -55,6 +55,13 @@ public:
 	static std::string ToString(std::shared_ptr<DiseaseStage>& stage);
 
 	/// <summary>
+	/// Calculates a chance
+	/// </summary>
+	/// <param name="chance"></param>
+	/// <returns></returns>
+	static bool CalcChance(float chance);
+
+	/// <summary>
 	/// Returns only infected actors from a list of actors
 	/// </summary>
 	/// <param name="actors"></param>
@@ -325,11 +332,12 @@ public:
 				cell = actors1[i]->GetParentCell();
 				cell2 = actors2[c]->GetParentCell();
 				if (cell != nullptr && cell2 != nullptr) {
-					if (!onlyiteriors && ((cell->cellFlags & RE::TESObjectCELL::Flag::kIsInteriorCell) == (cell2->cellFlags & RE::TESObjectCELL::Flag::kIsInteriorCell))) {
+					if (!onlyiteriors && cell->IsInteriorCell() == cell2->IsInteriorCell()) {
 						// if it actually is an interior cell, check whether its the same
 						if (cell->IsInteriorCell()) {
 							if (cell->GetFormID() == cell2->GetFormID()) {
 								distance = sqrtf(actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
+								loginfo("calc, {}, {}, {}", Utility::PrintForm(actors1[i]), Utility::PrintForm(actors2[c]), distance);
 							}
 							// if its not the same set ifinity
 							else {
@@ -363,7 +371,7 @@ public:
 					// add to vector if distancethreshol holds
 					if (distance < distancethreshold) {
 						// the entry is actorid1 concat actor1d2 -> actorid1 = 0x1, actorid2 = 0x30 -> 0x0000000100000030
-						distances.insert_or_assign((((uint64_t)actors1[i]->GetFormID()) << 32) | actors2[c]->GetFormID(), distance);
+						//distances.insert_or_assign((((uint64_t)actors1[i]->GetFormID()) << 32) | actors2[c]->GetFormID(), distance);
 						distances.insert_or_assign((((uint64_t)i) << 32) | (uint64_t)c, distance);
 					}
 				}

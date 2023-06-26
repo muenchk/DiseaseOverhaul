@@ -19,6 +19,7 @@ set(SOURCE_FILES
 	"${SOURCE_DIR}/Events_Main.cpp"
 	"${SOURCE_DIR}/Events_Main_Support.cpp"
 	"${SOURCE_DIR}/Game.cpp"
+	"${SOURCE_DIR}/Hooks.cpp"
 	"${SOURCE_DIR}/ID.cpp"
 	"${SOURCE_DIR}/main.cpp"
 	"${SOURCE_DIR}/PCH.h"
@@ -29,6 +30,7 @@ set(SOURCE_FILES
 	"${SOURCE_DIR}/Utility.cpp"
 	"${SOURCE_DIR}/UtilityAlch.cpp"
 	"${SOURCE_DIR}/WeatherInfo.cpp"
+	"${SOURCE_DIR}/WorldspaceController.cpp"
 )
 
 source_group(TREE "${ROOT_DIR}" FILES ${SOURCE_FILES})

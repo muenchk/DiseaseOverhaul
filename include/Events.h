@@ -169,6 +169,12 @@ namespace Events
 		static void ProcessDistribution(std::shared_ptr<ActorInfo> acinfo);
 
 		/// <summary>
+		/// Processes the initial infections for an actor
+		/// </summary>
+		/// <param name="acinfo"></param>
+		static void ProcessInfections(std::shared_ptr<ActorInfo> acinfo);
+
+		/// <summary>
 		/// Removes all distributable alchemy items from all actors in the game on loading a game
 		/// </summary>
 		static void RemoveItemsOnStartup();
@@ -390,7 +396,8 @@ namespace Events
 		public RE::BSTEventSink<RE::TESCellAttachDetachEvent>,
 		public RE::BSTEventSink<RE::InputEvent*>,
 		public RE::BSTEventSink<RE::TESFormDeleteEvent>,
-		public RE::BSTEventSink<RE::TESContainerChangedEvent>
+		public RE::BSTEventSink<RE::TESContainerChangedEvent>,
+		public RE::BSTEventSink<RE::BGSActorCellEvent>
 	{
 	public:
 		/// <summary>
@@ -451,6 +458,13 @@ namespace Events
 		/// <param name="a_eventSource"></param>
 		/// <returns></returns>
 		virtual EventResult ProcessEvent(const RE::TESFormDeleteEvent* a_event, RE::BSTEventSource<RE::TESFormDeleteEvent>* a_eventSource) override;
+		/// <summary>
+		/// EventHandler for catching player change cell
+		/// </summary>
+		/// <param name="a_event"></param>
+		/// <param name="a_eventSource"></param>
+		/// <returns></returns>
+		virtual EventResult ProcessEvent(const RE::BGSActorCellEvent* a_event, RE::BSTEventSource<RE::BGSActorCellEvent>* a_eventSource) override;
 		/// <summary>
 		/// EventHandler for catching remove item events
 		/// </summary>

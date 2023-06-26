@@ -220,7 +220,11 @@ private:
 	/// </summary>
 	long long timestamp_invalid;
 
+	bool _processedInitialInfections = false;
+
 public:
+
+	std::string _altName = "";
 
 	static inline const uint32_t version = 0x10000001;
 
@@ -329,6 +333,12 @@ public:
 	void Reset(RE::Actor* _actor);
 
 	/// <summary>
+	/// Returns whether the actor is infected
+	/// </summary>
+	/// <returns></returns>
+	bool IsInfected();
+
+	/// <summary>
 	/// Returns the underlying actor object
 	/// </summary>
 	/// <returns></returns>
@@ -424,6 +434,17 @@ public:
 	/// Set that the whitelist status of the actor has been calculated
 	/// </summary>
 	void SetWhitelistCalculated() { whitelistedcalculated = true; }
+
+	/// <summary>
+	/// Whether the initial infections have been calculated for the actor
+	/// </summary>
+	/// <returns></returns>
+	bool ProcessedInitialInfections() { _processedInitialInfections; }
+	/// <summary>
+	/// Sets whether the initial infections have been processed
+	/// </summary>
+	/// <param name="processed"></param>
+	void ProcessedInitialInfections(bool processed) { _processedInitialInfections = processed; }
 
 	/// <summary>
 	/// Whether the NPC is currently in combat
@@ -693,6 +714,64 @@ public:
 	/// </summary>
 	/// <returns></returns>
 	bool IsPlayer();
+
+	/// <summary>
+	/// Returns the actor handle
+	/// </summary>
+	/// <returns></returns>
+	RE::ActorHandle GetHandle();
+
+	/// <summary>
+	/// Cast spell
+	/// </summary>
+	/// <param name="do_cast"></param>
+	/// <param name="arg2"></param>
+	/// <param name="spell"></param>
+	void CastSpell(bool do_cast, uint32_t arg2, RE::MagicItem* spell);
+
+	/// <summary>
+	/// Dispels a spell applied to the actor
+	/// </summary>
+	/// <param name="spell"></param>
+	void DispelEffect(RE::MagicItem* spell);
+
+	/// <summary>
+	/// Adds a spell to the actor
+	/// </summary>
+	/// <param name="spell"></param>
+	void AddSpell(RE::SpellItem* spell);
+
+	/// <summary>
+	/// Removes a spell to the actor
+	/// </summary>
+	/// <param name="spell"></param>
+	void RemoveSpell(RE::SpellItem* spell);
+
+	/// <summary>
+	/// Unequip object
+	/// </summary>
+	/// <param name="object"></param>
+	void UnequipObject(RE::TESBoundObject* object);
+
+	/// <summary>
+	/// Equip object
+	/// </summary>
+	/// <param name="object"></param>
+	/// <param name="extraData"></param>
+	/// <param name="count"></param>
+	/// <param name="slot"></param>
+	/// <param name="queueEquip"></param>
+	/// <param name="forceEquip"></param>
+	/// <param name="playSounds"></param>
+	/// <param name="applyNow"></param>
+	void EquipObject(RE::TESBoundObject* object, RE::ExtraDataList* extraData = nullptr, std::uint32_t count = 1, const RE::BGSEquipSlot* slot = nullptr, bool queueEquip = true, bool forceEquip = false, bool playSounds = true, bool applyNow = true);
+
+	/// <summary>
+	/// equip spell
+	/// </summary>
+	/// <param name="a_spell"></param>
+	/// <param name="slot"></param>
+	void EquipSpell(RE::SpellItem* a_spell, const RE::BGSEquipSlot* slot = nullptr);
 
 	/// <summary>
 	/// Returns the inventory of the actor

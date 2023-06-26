@@ -1,3 +1,4 @@
+#include "Random.h"
 #include "UtilityAlch.h"
 
 std::string UtilityAlch::ToString(Diseases::Disease value)
@@ -103,3 +104,8 @@ std::string UtilityAlch::ToString(std::shared_ptr<DiseaseStage>& stage)
 {
 	return std::string("[") + typeid(DiseaseStage).name() + "<" + stage->_specifier + "><AdvancementTreshold:" + std::to_string(stage->_advancementThreshold) + "><AdvancementTime:" + std::to_string(stage->_advancementTime) + "><Infectivity:" + std::to_string(static_cast<int>(stage->_infectivity)) + "><Effect:" + PrintForm(stage->effect) + ">]";
  }
+
+bool UtilityAlch::CalcChance(float chance)
+{
+	return Random::rand1000(Random::rand) < (chance * 10);
+}

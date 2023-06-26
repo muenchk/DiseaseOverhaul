@@ -13,6 +13,14 @@ namespace Random
 	/// </summary>
 	std::uniform_int_distribution<signed> rand100(1, 100);
 	/// <summary>
+	/// trims random numbers to 1 to 1000
+	/// </summary>
+	std::uniform_int_distribution<signed> rand1000(1, 1000);
+	/// <summary>
+	/// trims random numbers to 1 to 10000
+	/// </summary>
+	std::uniform_int_distribution<signed> rand10000(1, 10000);
+	/// <summary>
 	/// trims random numbers to 1 to 3
 	/// </summary>
 	std::uniform_int_distribution<signed> rand3(1, 3);

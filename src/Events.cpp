@@ -20,6 +20,7 @@
 #include "Data.h"
 #include "Random.h"
 #include "Stats.h"
+#include "WorldspaceController.h"
 		
 namespace Events
 {
@@ -297,6 +298,18 @@ TESDeathEventEnd:
 		return EventResult::kContinue;
 	}
 
+	EventResult EventHandler::ProcessEvent(const RE::BGSActorCellEvent* a_event, RE::BSTEventSource<RE::BGSActorCellEvent>*)
+	{
+		// very important event. Allows to catch actors and other stuff that gets deleted, without dying, which could cause CTDs otherwise
+		
+		if (auto actor = a_event->actor.get().get(); actor != nullptr)
+		{
+			if (actor->IsPlayerRef())
+				World::GetSingleton()->PlayerChangeCell(a_event->cellID);
+		}
+		return EventResult::kContinue;
+	}
+
 
 	EventResult EventHandler::ProcessEvent(const RE::TESContainerChangedEvent* a_event, RE::BSTEventSource<RE::TESContainerChangedEvent>* /*a_eventSource*/)
 	{
@@ -375,7 +388,7 @@ TESDeathEventEnd:
 					// increase stage target
 					if (target) {
 						std::shared_ptr<ActorInfo> acinfo = Main::data->FindActor(target);
-						acinfo->dinfo.ForceIncreaseStage(target, Diseases::kAshWoeBlight);
+						acinfo->dinfo.ForceIncreaseStage(acinfo, Diseases::kAshWoeBlight);
 						console->Print(std::string("AlchExt: Increased target stage").c_str());
 					} else
 						console->Print(std::string("AlchExt: Missing target").c_str());
@@ -384,7 +397,7 @@ TESDeathEventEnd:
 					// decrease stage target
 					if (target) {
 						std::shared_ptr<ActorInfo> acinfo = Main::data->FindActor(target);
-						acinfo->dinfo.ForceDecreaseStage(target, Diseases::kAshWoeBlight);
+						acinfo->dinfo.ForceDecreaseStage(acinfo, Diseases::kAshWoeBlight);
 						console->Print(std::string("AlchExt: Decreased target stage").c_str());
 					} else
 						console->Print(std::string("AlchExt: Missing target").c_str());
@@ -414,7 +427,7 @@ TESDeathEventEnd:
 					LOG_3("{}[Events] [InputEvent] registered inc adv points event");
 					if (target) {
 						std::shared_ptr<ActorInfo> acinfo = Main::data->FindActor(target);
-						bool kill = acinfo->dinfo.ProgressDisease(target, Diseases::kAshWoeBlight, 500);
+						bool kill = acinfo->dinfo.ProgressDisease(acinfo, Diseases::kAshWoeBlight, 500);
 						console->Print(std::string("AlchExt: Decreased target stage").c_str());
 					} else
 						console->Print(std::string("AlchExt: Missing target").c_str());

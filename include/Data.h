@@ -4,6 +4,7 @@
 #include <unordered_set>
 
 #include "ActorInfo.h"
+#include "Misc.h"
 
 class Data
 {
@@ -71,8 +72,16 @@ public:
 	/// <summary>
 	/// map that contains diseases an actor/etc. may be infected with at initialization
 	/// </summary>
+	std::unordered_map<uint32_t, Diseases::Disease> diseasesForceAssoc;
+
+	/// <summary>
+	/// map that contains diseases an actor/etc. may be infected with at initialization
+	/// </summary>
 	std::unordered_map<uint32_t, std::unique_ptr<std::vector<Diseases::Disease>>> diseasesAssoc;
 
+	/// <summary>
+	/// map that contains
+	/// </summary>
 	std::vector<Diseases::Disease> spreadingDiseaseMap[Spreading::kMaxValue];
 
 	
@@ -250,6 +259,13 @@ public:
 	/// <param name="weather"></param>
 	/// <returns></returns>
 	std::shared_ptr<WeatherInfo> FindWeather(RE::TESWeather* weather);
+
+	/// <summary>
+	/// Calculates what an actor should be infected with and infects then
+	/// </summary>
+	/// <param name="acinfo"></param>
+	/// <returns>vector of possible infections, vector of forced infections</returns>
+	std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> GetPossibleInfections(std::shared_ptr<ActorInfo> const& acinfo, Misc::NPCTPLTInfo* tpltinfo);
 
 	void AddDiseaseStage(std::shared_ptr<DiseaseStage> stage, uint16_t stageid);
 	void InitDisease(std::shared_ptr<Disease> disease, uint16_t stageinfection, uint16_t stageincubation, std::vector<uint16_t> stageids);

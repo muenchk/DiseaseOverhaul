@@ -1,7 +1,9 @@
 
 #include "ActorManipulation.h"
 #include "Events.h"
+#include "Random.h"
 #include "Utility.h"
+#include "UtilityAlch.h"
 
 namespace Events
 {
@@ -73,6 +75,65 @@ namespace Events
 				}
 			}
 		}*/
+	}
+
+	void Main::ProcessInfections(std::shared_ptr<ActorInfo> acinfo)
+	{
+		if (acinfo->ProcessedInitialInfections() == false)
+		{
+			auto tplt = Utility::ExtractTemplateInfo(acinfo->GetActor());
+			auto [infections_possible_set, infections_forced_set] = data->GetPossibleInfections(acinfo, &tplt);
+			std::vector<Diseases::Disease> infections_possible;
+			std::vector<Diseases::Disease> infections_forced;
+			std::for_each(infections_possible_set.begin(), infections_possible_set.end(), [&infections_possible](Diseases::Disease dis) { infections_possible.push_back(dis); });
+			std::for_each(infections_possible_set.begin(), infections_forced_set.end(), [&infections_forced](Diseases::Disease dis) { infections_forced.push_back(dis); });
+
+			std::uniform_int_distribution<signed> rand5(1, 5);
+
+			if (Settings::Infection::_AllowMultipleDiseases == false) {
+				// if multiple infections aren't allowed, pick a random one from the force infections if there are any
+				if (infections_forced.size() > 0) {
+					std::uniform_int_distribution<signed> rand(0, infections_forced.size() - 1);
+					int count = rand5(Random::rand);
+					for (int i = 1; i <= count; i++)
+						acinfo->dinfo.ForceIncreaseStage(acinfo, infections_forced[rand(Random::rand)]);
+				} else if (infections_possible.size() > 0) {
+					for (int i = 0; i < infections_possible.size(); i++)
+					{
+						if (UtilityAlch::CalcChance(data->GetDisease(infections_possible[i])->_baseInfectionChance))
+						{
+							int count = rand5(Random::rand);
+							for (int i = 1; i <= count; i++)
+								acinfo->dinfo.ForceIncreaseStage(acinfo, infections_possible[i]);
+							return;
+						}
+					}
+				}
+			}
+			else
+			{
+				// if multiple infections are allowed process them
+
+				// first remove forced infections from the possible ones
+				for (auto dis : infections_forced_set)
+					infections_possible_set.erase(dis);
+
+				// process forced infections
+				for (auto dis : infections_forced_set) {
+					int count = rand5(Random::rand);
+					for (int i = 1; i <= count; i++)
+						acinfo->dinfo.ForceIncreaseStage(acinfo, dis);
+				}
+				// process possible infections
+				for (auto dis : infections_possible_set) {
+					if (UtilityAlch::CalcChance(data->GetDisease(dis)->_baseInfectionChance)) {
+						int count = rand5(Random::rand);
+						for (int i = 1; i <= count; i++)
+							acinfo->dinfo.ForceIncreaseStage(acinfo, dis);
+					}
+				}
+			}
+		}
 	}
 
 	

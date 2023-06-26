@@ -2312,8 +2312,10 @@ std::tuple<std::shared_ptr<DiseaseStage>, uint16_t> LoadDiseaseStage(std::vector
 
 	auto ParseEffects = [&splits, &splitindex, &file, &tmp]() {
 		DiseaseEffect eff;
-		if (splits->at(splitindex) == "")
+		if (splits->at(splitindex) == "") {
 			eff = DiseaseEffect::kNone;
+			splitindex++;
+		}
 		else
 			try {
 				eff = static_cast<DiseaseEffect>(std::stoi(splits->at(splitindex)));
@@ -2324,8 +2326,10 @@ std::tuple<std::shared_ptr<DiseaseStage>, uint16_t> LoadDiseaseStage(std::vector
 				return std::pair<DiseaseEffect, Magnitude>{ DiseaseEffect::kNone, 0.0f };
 			}
 		Magnitude mag;
-		if (splits->at(splitindex) == "")
+		if (splits->at(splitindex) == "") {
 			mag = 0.0f;
+			splitindex++;
+		}
 		else
 			try {
 				mag = std::stof(splits->at(splitindex));
@@ -2340,8 +2344,10 @@ std::tuple<std::shared_ptr<DiseaseStage>, uint16_t> LoadDiseaseStage(std::vector
 
 	auto ParseSpreading = [&splits, &splitindex, &file, &tmp]() {
 		float chance, points;
-		if (splits->at(splitindex) == "")
+		if (splits->at(splitindex) == "") {
 			chance = 0.0f;
+			splitindex++;
+		}
 		else
 			try {
 				chance = std::stof(splits->at(splitindex));
@@ -2351,8 +2357,10 @@ std::tuple<std::shared_ptr<DiseaseStage>, uint16_t> LoadDiseaseStage(std::vector
 			} catch (std::invalid_argument&) {
 				return std::pair<float, float>{ 0.0f, 0.0f };
 			}
-		if (splits->at(splitindex) == "")
+		if (splits->at(splitindex) == "") {
 			points = 0.0f;
+			splitindex++;
+		}
 		else
 			try {
 				points = std::stof(splits->at(splitindex));
@@ -2362,13 +2370,16 @@ std::tuple<std::shared_ptr<DiseaseStage>, uint16_t> LoadDiseaseStage(std::vector
 			} catch (std::invalid_argument&) {
 				return std::pair<float, float>{ 0.0f, 0.0f };
 			}
+		loginfo("[ParseSpreading] {}, {}", chance, points);
 		return std::pair<float, float>(chance, points);
 	};
 
 	auto ParsePoints = [&splits, &splitindex, &file, &tmp]() {
 		float f;
-		if (splits->at(splitindex) == "")
+		if (splits->at(splitindex) == "") {
 			f = 0.0f;
+			splitindex++;
+		}
 		else
 			try {
 				f = std::stof(splits->at(splitindex));
@@ -3191,18 +3202,7 @@ void Settings::LoadDistrConfig()
 										case Distribution::AssocType::kRace:
 											{
 												auto data = Data::GetSingleton();
-												auto itr = data->diseasesAssoc.find(std::get<1>(items[i]));
-												if (itr != data->diseasesAssoc.end()) {
-													if (itr->second)  // vector valid
-													{
-														itr->second->push_back(disease);
-													} else  // vector not valid
-													{
-														std::unique_ptr<std::vector<Diseases::Disease>> vec = std::make_unique<std::vector<Diseases::Disease>>();
-														vec->push_back(disease);
-														data->diseasesAssoc.insert_or_assign(std::get<1>(items[i]), std::move(vec));
-													}
-												}
+												data->diseasesForceAssoc.insert_or_assign(std::get<1>(items[i]), disease);
 											}
 											break;
 										}
@@ -3325,6 +3325,61 @@ void Settings::LoadDistrConfig()
 												auto itr = data->textureMap.find(std::get<1>(items[i]));
 												if (itr != data->textureMap.end() && itr->second) {
 													itr->second->type |= texturetype;
+												}
+											}
+											break;
+										}
+									}
+									delete splits;
+								}
+								break;
+							case 105:  // disease: define probable infection
+								{
+									if (splits->size() != 4) {
+										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+									Diseases::Disease disease = Diseases::kAshChancre;
+									try {
+										disease = static_cast<Diseases::Disease>(std::stoi(splits->at(splitindex)));
+										splitindex++;
+									} catch (std::out_of_range&) {
+										logger::warn("[Settings] [LoadDistrRules] out-of-range expection in field \"Disease\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									} catch (std::invalid_argument&) {
+										logger::warn("[Settings] [LoadDistrRules] invalid-argument expection in field \"Disease\". file: {}, rule:\"{}\"", file, tmp);
+										delete splits;
+										continue;
+									}
+
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp, total);
+									for (int i = 0; i < items.size(); i++) {
+										switch (std::get<0>(items[i])) {
+										case Distribution::AssocType::kActor:
+										case Distribution::AssocType::kNPC:
+										case Distribution::AssocType::kClass:
+										case Distribution::AssocType::kCombatStyle:
+										case Distribution::AssocType::kFaction:
+										case Distribution::AssocType::kKeyword:
+										case Distribution::AssocType::kRace:
+											{
+												auto data = Data::GetSingleton();
+												auto itr = data->diseasesAssoc.find(std::get<1>(items[i]));
+												if (itr != data->diseasesAssoc.end()) {
+													if (itr->second)  // vector valid
+													{
+														itr->second->push_back(disease);
+													} else  // vector not valid
+													{
+														std::unique_ptr<std::vector<Diseases::Disease>> vec = std::make_unique<std::vector<Diseases::Disease>>();
+														vec->push_back(disease);
+														data->diseasesAssoc.insert_or_assign(std::get<1>(items[i]), std::move(vec));
+													}
 												}
 											}
 											break;

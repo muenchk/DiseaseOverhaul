@@ -4,6 +4,8 @@
 #include "APIs/NUPInterface.h"
 #include "DataStorage.h"
 #include "Data.h"
+#include "Hooks.h"
+#include "WorldspaceController.h"
 
 namespace
 {
@@ -161,6 +163,8 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 		Storage::Register();
 		// init diseases
 		//Data::GetSingleton()->InitDiseases();
+		// init worldspace data
+		World::GetSingleton()->Init();
 		PROF1_1("{}[main] [Startup] execution time: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()));
 		break;
 	case SKSE::MessagingInterface::kPostLoad:
@@ -177,7 +181,7 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 
 	SKSE::Init(a_skse);
 
-	//SKSE::AllocTrampoline(1<<4);
+	SKSE::AllocTrampoline(1<<6);
 
 	auto messaging = SKSE::GetMessagingInterface();
 	if (!messaging->RegisterListener("SKSE", MessageHandler)) {
@@ -193,7 +197,7 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 
 	Game::SaveLoad::GetSingleton()->Register(serialization, 0xFD34899E);
 
-	//Hooks::InstallHooks();
+	Hooks::InstallHooks();
 
 	return true;
 }

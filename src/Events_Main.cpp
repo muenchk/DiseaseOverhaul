@@ -15,6 +15,7 @@
 #include "Utility.h"
 #include "UtilityAlch.h"
 #include "Stats.h"
+#include "WorldspaceController.h"
 
 namespace Events
 {
@@ -69,6 +70,7 @@ namespace Events
 					cinfo = data->FindCell(playerinfo->GetParentCell());
 					if (!cellist.contains(cinfo))
 						cellist.insert(cinfo);
+					actors.push_back(playerinfo);
 				}
 
 				// get weather information
@@ -76,7 +78,7 @@ namespace Events
 
 				LOG_1("{}[Events] [HandleActors] get all actors");
 
-				auto citer = cellist.begin();
+				/*auto citer = cellist.begin();
 				while (citer != cellist.end()) {
 					cinfo = *citer;
 					// first get all actors that shall be handled in player cell
@@ -89,7 +91,15 @@ namespace Events
 						}
 					}
 					citer++;
+				}*/
+
+				LOG1_1("{}[Events] [HandleActors] registered actors {}", acset.size());
+				for (auto weak : acset)
+				{
+					if (auto acinfo = weak.lock())
+						actors.push_back(acinfo);
 				}
+				LOG1_1("{}[Events] [HandleActors] valid actors {}", acset.size());
 
 				// release lock
 				sem.release();
@@ -112,7 +122,7 @@ namespace Events
 				// calculate ticks for each actor and set current time as last change
 				for (int x = 0; x < actors.size(); x++) {
 					ticks[x] = (int)((currentgameday - actors[x]->dinfo.LastGameTime) / Settings::System::_ticklength);
-					//LOG4_1("{}[Events] [HandleActors] time: {}\tlast: {}\tticklength: {}\tticks: {}", currentgameday, actors[x]->dinfo->LastGameTime, Settings::AlchExtSettings::TickLength, ticks[x]);
+					LOG4_1("{}[Events] [HandleActors] time: {}\tlast: {}\tticklength: {}\tticks: {}", currentgameday, actors[x]->dinfo.LastGameTime, Settings::System::_ticklength, ticks[x]);
 					if (ticks[x] > 0)
 						actors[x]->dinfo.LastGameTime = currentgameday;
 					points[x] = 0;
@@ -132,6 +142,7 @@ namespace Events
 					for (int i = 0; i < Diseases::kMaxValue; i++)
 						infected[i] = UtilityAlch::GetProgressingActors(actors, static_cast<Diseases::Disease>(i));
 					allinfected = UtilityAlch::GetProgressingActors(actors);
+					LOG2_1("{}[Events] [HandleActors] calculate particle effects. actors {}, infected {}", actors.size(), allinfected.size());
 					// will be deleted after we leave the block
 					std::unordered_map<uint64_t /*actormashup*/, float /*distance*/> distances = UtilityAlch::GetActorDistancesMap(allinfected, actors, Settings::Disease::_particleRange);
 					LOG1_1("{}[Events] [HandleActors] calculate particle effects for {} pairs", distances.size());
@@ -144,7 +155,7 @@ namespace Events
 						if (!dis)
 							continue;
 						if (dis->ParticleSpread() == false) {
-							//LOG1_1("{}[Events] [HandleEvents] Disease does not spread via particles: {}", UtilityAlch::ToString(disval));
+							LOG1_1("{}[Events] [HandleEvents] Disease does not spread via particles: {}", UtilityAlch::ToString(disval));
 							continue;  // disease does not spread via particles
 						}
 						std::shared_ptr<DiseaseStage> stage = nullptr;
@@ -193,12 +204,16 @@ namespace Events
 							int idx2;
 							auto iter = distances.begin();
 							while (iter != distances.end()) {
-								//LOG2_1("{}tried to access index: {} of max {}", iter->first >> 32, allinfected.size());
 								if (iter->first >> 32 > allinfected.size() || (uint32_t)(iter->first) > actors.size()) {
 									iter++;
 									continue;
 								}
 								infec = allinfected[iter->first >> 32];
+								if (infec->dinfo.IsInfectedProgressing(disval) == false) {
+									iter++;
+									continue;
+								}
+								LOG2_1("{}tried to access index: {} and {}", iter->first >> 32, (uint32_t)(iter->first));
 								idx2 = (uint32_t)iter->first;
 								act = actors[idx2];
 								float scale = 0;
@@ -234,7 +249,7 @@ namespace Events
 							// add the points
 							for (int x = 0; x < actors.size(); x++) {
 								if (points[x] != 0) {
-									kill[x] |= actors[x]->dinfo.ProgressDisease(actors[x]->GetActor(), disval, points[x]);
+									kill[x] |= actors[x]->dinfo.ProgressDisease(actors[x], disval, points[x]);
 									// reset points for next iteration / further stuff
 									points[x] = 0;
 								}
@@ -285,6 +300,8 @@ namespace Events
 						std::shared_ptr<Disease> dis = data->GetDisease(disval);
 						if (!dis)
 							continue;
+						if (dis->AirSpread() == false)
+							continue;  // disease does not spread via air
 						std::shared_ptr<DiseaseStage> stage = nullptr;
 						// iterate over infected for disease
 						for (int c = 0; c < infected[i].size(); c++) {
@@ -329,7 +346,7 @@ namespace Events
 						// add the points
 						for (int x = 0; x < actors.size(); x++) {
 							if (points[x] != 0) {
-								kill[x] |= actors[x]->dinfo.ProgressDisease(actors[x]->GetActor(), disval, points[x]);
+								kill[x] |= actors[x]->dinfo.ProgressDisease(actors[x], disval, points[x]);
 								// reset points for next iteration / further stuff
 								points[x] = 0;
 							}
@@ -345,15 +362,15 @@ namespace Events
 					// get disease
 					Diseases::Disease disval = static_cast<Diseases::Disease>(i);
 					std::shared_ptr<Disease> dis = data->GetDisease(disval);
-					if (!dis)
+					if (!dis) {
+						//LOG_1("{}[Events] [HandleActors] skip disease");
 						continue;
-					if (dis->AirSpread() == false)
-						continue;  // disease does not spread via air
+					}
 					std::shared_ptr<DiseaseStage> stage = nullptr;
 					DiseaseInfo* dinfo = nullptr;
 					// iterate actors
 					for (int x = 0; x < actors.size(); x++) {
-						//LOG1_1("{}[Events] [HandleActors] actor: {}", actors[x]->actor->GetName());
+						//LOG1_1("{}[Events] [HandleActors] actor: {}", actors[x]->GetName());
 						if (ticks[x] == 0)
 							continue;
 						dinfo = actors[x]->dinfo.FindDisease(disval);
@@ -380,6 +397,7 @@ namespace Events
 							scale = 2.0f;
 						}
 						scale = scale * (1 - actors[x]->IgnoresDisease());
+						//LOG2_1("{}[Events] [HandleActors] base, ticks: {}, scale: {}", ticks[x], scale);
 						if (scale > 0.0f) {
 							//LOG1_1("{}[Events] [HandleActors] base, ticks: {}", ticks[x]);
 							// iterate ticks
@@ -538,7 +556,7 @@ namespace Events
 					// add the points
 					for (int x = 0; x < actors.size(); x++) {
 						if (points[x] != 0) {
-							kill[x] |= actors[x]->dinfo.ProgressDisease(actors[x]->GetActor(), disval, points[x]);
+							kill[x] |= actors[x]->dinfo.ProgressDisease(actors[x], disval, points[x]);
 							// reset points for next iteration / further stuff
 							points[x] = 0;
 						}
@@ -632,6 +650,43 @@ HandleActorsSkipIteration:
 		enableProcessing = true;
 
 		InitializeCompatibilityObjects();
+
+		World::GetSingleton()->PlayerChangeCell(RE::PlayerCharacter::GetSingleton()->GetParentCell());
+
+		
+		// when loading the game, the attach detach events for actors aren't fired until cells have been changed
+		// thus we need to get all currently loaded npcs manually
+		RE::TESObjectCELL* cell = nullptr;
+		std::vector<RE::TESObjectCELL*> gamecells;
+		const auto& [hashtable, lock] = RE::TESForm::GetAllForms();
+		{
+			const RE::BSReadLockGuard locker{ lock };
+			if (hashtable) {
+				for (auto& [id, form] : *hashtable) {
+					if (form) {
+						cell = form->As<RE::TESObjectCELL>();
+						if (cell) {
+							gamecells.push_back(cell);
+						}
+					}
+				}
+			}
+		}
+		LOG1_1("{}[Events] [LoadGameSub] found {} cells", std::to_string(gamecells.size()));
+		for (int i = 0; i < (int)gamecells.size(); i++) {
+			if (gamecells[i]->IsAttached()) {
+				for (auto& ptr : gamecells[i]->GetRuntimeData().references) {
+					if (ptr.get()) {
+						RE::Actor* actor = ptr.get()->As<RE::Actor>();
+						if (Utility::ValidateActor(actor) && !Main::IsDead(actor) && !actor->IsPlayerRef()) {
+							if (Distribution::ExcludedNPCFromHandling(actor) == false)
+								RegisterNPC(actor);
+						}
+					}
+				}
+			}
+		}
+
 		LOG_1("{}[Events] [LoadGameCallback] end");
 		PROF1_1("{}[Events] [LoadGameCallback] execution time: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()));
 	}
@@ -653,6 +708,8 @@ HandleActorsSkipIteration:
 		// reset actor processing list
 		acset.clear();
 		cellist.clear();
+
+		World::GetSingleton()->Reset();
 	}
 	
 	long Main::SaveDeadActors(SKSE::SerializationInterface* a_intfc)

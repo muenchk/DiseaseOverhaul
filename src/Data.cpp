@@ -1135,7 +1135,38 @@ void Data::InitDisease(std::shared_ptr<Disease> disease, uint16_t stageinfection
 		}
 	}
 
+	disease->CalcFlags();
+
 	diseases[disease->_disease] = disease;
+
+	if (disease->_stageInfection->_spreading[Spreading::kIntenseCold].first > 0)
+		spreadingDiseaseMap[Spreading::kIntenseCold].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kIntenseHeat].first > 0)
+		spreadingDiseaseMap[Spreading::kIntenseHeat].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kInAshland].first > 0)
+		spreadingDiseaseMap[Spreading::kInAshland].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kInSwamp].first > 0)
+		spreadingDiseaseMap[Spreading::kInSwamp].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kInDessert].first > 0)
+		spreadingDiseaseMap[Spreading::kInDessert].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kInAshstorm].first > 0)
+		spreadingDiseaseMap[Spreading::kInAshstorm].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kInSandstorm].first > 0)
+		spreadingDiseaseMap[Spreading::kInSandstorm].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kInBlizzard].first > 0)
+		spreadingDiseaseMap[Spreading::kInBlizzard].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kInRain].first > 0)
+		spreadingDiseaseMap[Spreading::kInRain].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kIsWindy].first > 0)
+		spreadingDiseaseMap[Spreading::kIsWindy].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kIsStormy].first > 0)
+		spreadingDiseaseMap[Spreading::kIsStormy].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kIsCold].first > 0)
+		spreadingDiseaseMap[Spreading::kIsCold].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kIsHeat].first > 0)
+		spreadingDiseaseMap[Spreading::kIsHeat].push_back(disease->_disease);
+	if (disease->_stageInfection->_spreading[Spreading::kExtremeConditions].first > 0)
+		spreadingDiseaseMap[Spreading::kExtremeConditions].push_back(disease->_disease);
 }
 
 void Data::ResetDiseases()
@@ -1152,4 +1183,178 @@ void Data::ResetDiseases()
 	}
 
 	diseaseStagesMap.clear();
+}
+
+std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPossibleInfections(std::shared_ptr<ActorInfo> const& acinfo, Misc::NPCTPLTInfo* tpltinfo)
+{
+	auto begin = std::chrono::steady_clock::now();
+	if (acinfo == nullptr || acinfo->IsValid() == false) {
+		return {};
+	}
+	// get npc template info
+	Misc::NPCTPLTInfo tplt;
+	if (tpltinfo == nullptr) {
+		tplt = Utility::ExtractTemplateInfo(acinfo->GetActor());
+		tpltinfo = &tplt;
+	}
+
+	std::set<Diseases::Disease> infec;
+	std::set<Diseases::Disease> infecforce;
+
+	auto base = acinfo->GetActorBase();
+
+	// define general stuff
+	auto race = acinfo->GetRace();
+
+	// find rule in npc map
+	// npc rules always have the highest priority
+	auto itnpcf = diseasesForceAssoc.find(acinfo->GetFormID());
+	if (itnpcf != diseasesForceAssoc.end()) {  // found the right rule!
+		infecforce.insert(itnpcf->second);
+	}
+
+	auto itnpc = diseasesAssoc.find(acinfo->GetFormID());
+	if (itnpc != diseasesAssoc.end() && itnpc->second) {  // found the right rule!
+		for (int i = 0; i < itnpc->second->size(); i++)
+			infec.insert(itnpc->second->at(i));
+	}
+
+	// search for base npc
+	itnpcf = diseasesForceAssoc.find(acinfo->GetActorBaseFormID());
+	if (itnpcf != diseasesForceAssoc.end()) {  // found the right rule!
+		infecforce.insert(itnpcf->second);
+	}
+
+	itnpc = diseasesAssoc.find(acinfo->GetActorBaseFormID());
+	if (itnpc != diseasesAssoc.end() && itnpc->second) {  // found the right rule!
+		for (int i = 0; i < itnpc->second->size(); i++)
+			infec.insert(itnpc->second->at(i));
+	}
+
+	// perform check on tpltactorbaseinformation
+	if (tpltinfo->base != nullptr && tpltinfo->base != acinfo->GetActorBase()) {
+		itnpcf = diseasesForceAssoc.find(tpltinfo->base->GetFormID());
+		if (itnpcf != diseasesForceAssoc.end()) {  // found the right rule!
+			infecforce.insert(itnpcf->second);
+		}
+		itnpc = diseasesAssoc.find(tpltinfo->base->GetFormID());
+		if (itnpc != diseasesAssoc.end() && itnpc->second) {  // found the right rule!
+			for (int i = 0; i < itnpc->second->size(); i++)
+				infec.insert(itnpc->second->at(i));
+		}
+	}
+
+	if (tpltinfo && tpltinfo->tpltrace)
+		race = tpltinfo->tpltrace;
+	// now that we didnt't find something so far, check the rest
+	// this time all the priorities are the same
+	auto it = diseasesAssoc.find(race->GetFormID());
+	if (it != diseasesAssoc.end())
+		for (int i = 0; i < it->second->size(); i++)
+			infec.insert(it->second->at(i));
+	for (uint32_t i = 0; i < race->numKeywords; i++) {
+		auto itr = diseasesAssoc.find(race->keywords[i]->GetFormID());
+		if (itr != diseasesAssoc.end()) {
+			for (int i = 0; i < itr->second->size(); i++)
+				infec.insert(itr->second->at(i));
+		}
+	}
+	auto itf = diseasesForceAssoc.find(race->GetFormID());
+	if (itf != diseasesForceAssoc.end())
+		infecforce.insert(itf->second);
+	for (uint32_t i = 0; i < race->numKeywords; i++) {
+		auto itrf = diseasesForceAssoc.find(race->keywords[i]->GetFormID());
+		if (itrf != diseasesForceAssoc.end()) {
+			infecforce.insert(itrf->second);
+		}
+	}
+
+
+	// handle keywords
+	for (unsigned int i = 0; i < base->numKeywords; i++) {
+		auto key = base->keywords[i];
+		if (key) {
+			auto it = diseasesAssoc.find(key->GetFormID());
+			if (it != diseasesAssoc.end())
+				for (int i = 0; i < it->second->size(); i++)
+					infec.insert(it->second->at(i));
+
+			auto itr = diseasesForceAssoc.find(key->GetFormID());
+			if (itr != diseasesForceAssoc.end())
+				infecforce.insert(itr->second);
+		}
+	}
+	if (tpltinfo) {
+		//logger::info("rule 10");
+		for (int i = 0; i < tpltinfo->tpltkeywords.size(); i++) {
+			if (tpltinfo->tpltkeywords[i]) {
+				auto it = diseasesAssoc.find(tpltinfo->tpltkeywords[i]->GetFormID());
+				if (it != diseasesAssoc.end())
+					for (int i = 0; i < it->second->size(); i++)
+						infec.insert(it->second->at(i));
+				auto itr = diseasesForceAssoc.find(tpltinfo->tpltkeywords[i]->GetFormID());
+				if (itr != diseasesForceAssoc.end())
+					infecforce.insert(itr->second);
+			}
+		}
+	}
+
+	// handle factions
+	for (uint32_t i = 0; i < base->factions.size(); i++) {
+		auto it = diseasesAssoc.find(base->factions[i].faction->GetFormID());
+		if (it != diseasesAssoc.end()) {
+			for (int i = 0; i < it->second->size(); i++)
+				infec.insert(it->second->at(i));
+		}
+		auto itr = diseasesForceAssoc.find(base->factions[i].faction->GetFormID());
+		if (itr != diseasesForceAssoc.end()) {
+			infecforce.insert(itr->second);
+		}
+	}
+	if (tpltinfo) {
+		for (int i = 0; i < tpltinfo->tpltfactions.size(); i++) {
+			if (tpltinfo->tpltfactions[i]) {
+				auto it = diseasesAssoc.find(tpltinfo->tpltfactions[i]->GetFormID());
+				if (it != diseasesAssoc.end()) {
+					for (int i = 0; i < it->second->size(); i++)
+						infec.insert(it->second->at(i));
+				}
+				auto itr = diseasesForceAssoc.find(tpltinfo->tpltfactions[i]->GetFormID());
+				if (itr != diseasesForceAssoc.end()) {
+					infecforce.insert(itr->second);
+				}
+			}
+		}
+	}
+
+	// dont use tplt for class and combatstyle, since they may have been modified during runtime
+
+	// handle classes
+	if (base->npcClass) {
+		auto it = diseasesAssoc.find(base->npcClass->GetFormID());
+		if (it != diseasesAssoc.end()) {
+			for (int i = 0; i < it->second->size(); i++)
+				infec.insert(it->second->at(i));
+		}
+		auto itr = diseasesForceAssoc.find(base->npcClass->GetFormID());
+		if (itr != diseasesForceAssoc.end()) {
+			infecforce.insert(itr->second);
+		}
+	}
+	// handle combat styles
+	if (base->combatStyle) {
+		auto it = diseasesAssoc.find(base->combatStyle->GetFormID());
+		if (it != diseasesAssoc.end()) {
+			for (int i = 0; i < it->second->size(); i++)
+				infec.insert(it->second->at(i));
+		}
+		auto itr = diseasesForceAssoc.find(base->combatStyle->GetFormID());
+		if (itr != diseasesForceAssoc.end()) {
+			infecforce.insert(itr->second);
+		}
+	}
+
+	PROF1_1("{}[Data] [GetPossibleInfections] execution time: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()));
+
+	return std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>>{ infec, infecforce };
 }

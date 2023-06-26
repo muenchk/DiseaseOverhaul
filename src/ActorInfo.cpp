@@ -43,7 +43,6 @@ ActorInfo::ActorInfo(RE::Actor* _actor)
 		// Run since [actor] is valid
 		UpdateMetrics(_actor);
 		CalcActorProperties();
-		dinfo.ForceIncreaseStage(_actor, Diseases::kAshWoeBlight);
 		// set to valid
 		valid = true;
 		timestamp_invalid = 0;
@@ -194,6 +193,11 @@ bool ActorInfo::GetDead()
 {
 	aclock;
 	return dead;
+}
+
+bool ActorInfo::IsInfected()
+{
+	return dinfo.IsInfected();
 }
 
 RE::Actor* ActorInfo::GetActor()
@@ -842,6 +846,8 @@ int32_t ActorInfo::GetDataSize()
 	//size += 1;
 	// _haslefthand
 	//size += 1;
+	// _processedinitialinfections
+	//size += 1;
 
 
 	// all except string are constant:
@@ -853,7 +859,7 @@ int32_t ActorInfo::GetMinDataSize(int32_t vers)
 {
 	switch (vers) {
 	case 0x10000001:
-		return 24;
+		return 25;
 	default:
 		return 0;
 	}
@@ -890,6 +896,8 @@ bool ActorInfo::WriteData(unsigned char* buffer, int offset)
 	Buffer::Write(_boss, buffer, offset);
 	// _haslefthand
 	Buffer::Write(_haslefthand, buffer, offset);
+	// _processedinitialinfections
+	Buffer::Write(_processedInitialInfections, buffer, offset);
 	return true;
 }
 
@@ -934,6 +942,7 @@ bool ActorInfo::ReadData(unsigned char* buffer, int offset, int length)
 				itemStrength = static_cast<ItemStrength>(Buffer::ReadUInt32(buffer, offset));
 				_boss = Buffer::ReadBool(buffer, offset);
 				_haslefthand = Buffer::ReadBool(buffer, offset);
+				_processedInitialInfections = Buffer::ReadBool(buffer, offset);
 
 				// init dependend stuff
 				pluginID = Utility::Mods::GetPluginIndex(pluginname);
@@ -1113,6 +1122,82 @@ bool ActorInfo::IsPlayer()
 {
 	return formid == 0x14;
 }
+
+RE::ActorHandle ActorInfo::GetHandle()
+{
+	return actor;
+}
+
+void ActorInfo::CastSpell(bool do_cast, uint32_t arg2, RE::MagicItem* spell)
+{
+	aclock;
+	if (!valid || dead || spell == nullptr)
+		return;
+
+	if (actor.get().get())
+		actor.get().get()->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->SpellCast(do_cast, arg2, spell);
+}
+
+void ActorInfo::DispelEffect(RE::MagicItem* spell)
+{
+	aclock;
+	if (!valid || dead || spell == nullptr)
+		return;
+
+	if (actor.get().get())
+		actor.get().get()->AsMagicTarget()->DispelEffect(spell, actor);
+}
+
+void ActorInfo::AddSpell(RE::SpellItem* spell)
+{
+	aclock;
+	if (!valid || dead || spell == nullptr)
+		return;
+
+	if (actor.get().get())
+		actor.get().get()->AddSpell(spell);
+}
+
+void ActorInfo::RemoveSpell(RE::SpellItem* spell)
+{
+	aclock;
+	if (!valid || dead || spell == nullptr)
+		return;
+
+	if (actor.get().get())
+		actor.get().get()->RemoveSpell(spell);
+}
+
+void ActorInfo::UnequipObject(RE::TESBoundObject* object)
+{
+	aclock;
+	if (!valid || dead)
+		return;
+
+	if (actor.get().get())
+		RE::ActorEquipManager::GetSingleton()->UnequipObject(actor.get().get(), object);
+}
+
+void ActorInfo::EquipObject(RE::TESBoundObject* object, RE::ExtraDataList* extraData, std::uint32_t count, const RE::BGSEquipSlot* slot, bool queueEquip, bool forceEquip, bool playSounds, bool applyNow)
+{
+	aclock;
+	if (!valid || dead)
+		return;
+
+	if (actor.get().get())
+		RE::ActorEquipManager::GetSingleton()->EquipObject(actor.get().get(), object, extraData, count, slot, queueEquip, forceEquip, playSounds, applyNow);
+}
+
+void ActorInfo::EquipSpell(RE::SpellItem* a_spell, const RE::BGSEquipSlot* slot)
+{
+	aclock;
+	if (!valid || dead)
+		return;
+
+	if (actor.get().get())
+		RE::ActorEquipManager::GetSingleton()->EquipSpell(actor.get().get(), a_spell, slot);
+}
+
 
 RE::TESObjectREFR::InventoryItemMap ActorInfo::GetInventory()
 {

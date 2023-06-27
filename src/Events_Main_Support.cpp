@@ -79,17 +79,17 @@ namespace Events
 
 	void Main::ProcessInfections(std::shared_ptr<ActorInfo> acinfo)
 	{
-		if (acinfo->ProcessedInitialInfections() == false)
-		{
-			auto tplt = Utility::ExtractTemplateInfo(acinfo->GetActor());
-			auto [infections_possible_set, infections_forced_set] = data->GetPossibleInfections(acinfo, &tplt);
+		if (acinfo->ProcessedInitialInfections() == false) {
+			LOG1_1("{}[Events] [ProcessInfections] Actor {}", Utility::PrintForm(acinfo));
+			/* auto tplt = Utility::ExtractTemplateInfo(acinfo->GetActor());*/
+			auto [infections_possible_set, infections_forced_set] = data->GetPossibleInfections(acinfo, nullptr/*&tplt*/);
 			std::vector<Diseases::Disease> infections_possible;
 			std::vector<Diseases::Disease> infections_forced;
 			try {
 				std::for_each(infections_possible_set.begin(), infections_possible_set.end(), [&infections_possible](Diseases::Disease dis) { infections_possible.push_back(dis); });
 				std::for_each(infections_forced_set.begin(), infections_forced_set.end(), [&infections_forced](Diseases::Disease dis) { infections_forced.push_back(dis); });
-			}
-			catch (std::bad_alloc& e) {
+			} catch (std::bad_alloc& e) {
+				LOG_1("{}[Events] [ProcessInfections] Error");
 				return;
 			}
 
@@ -125,12 +125,14 @@ namespace Events
 
 				// process forced infections
 				for (auto dis : infections_forced_set) {
+					LOG1_1("{}[Events] [ProcessInfections] Forced Infection {}", UtilityAlch::ToString(dis));
 					int count = rand5(Random::rand);
 					for (int i = 1; i <= count; i++)
 						acinfo->ForceIncreaseStage(dis);
 				}
 				// process possible infections
 				for (auto dis : infections_possible_set) {
+					LOG1_1("{}[Events] [ProcessInfections] Possible Infection {}", UtilityAlch::ToString(dis));
 					if (UtilityAlch::CalcChance(data->GetDisease(dis)->_baseInfectionChance)) {
 						int count = rand5(Random::rand);
 						for (int i = 1; i <= count; i++)
@@ -181,7 +183,7 @@ namespace Events
 		}
 		sem.release();
 
-		acinfo->ForceIncreaseStage(Diseases::kAshWoeBlight);
+		//acinfo->ForceIncreaseStage(Diseases::kAshWoeBlight);
 
 		ProcessDistribution(acinfo);
 		ProcessInfections(acinfo);

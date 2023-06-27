@@ -116,5 +116,7 @@ public:
 	/// <returns>vector with size sizeof([actors1]) containing vectors of size sizeof([actors2])</returns>
 	static std::unordered_map<uint64_t /*actormashup*/, float /*distance*/> GetActorDistancesMap(std::vector<std::shared_ptr<ActorInfo>> actors1, std::vector<std::shared_ptr<ActorInfo>> actors2, float distancethreshold, bool onlyiteriors = false);
 
+	static std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> GetActorDistancesList(std::vector<std::shared_ptr<ActorInfo>> actors1, std::vector<std::shared_ptr<ActorInfo>> actors2, float distancethreshold, bool onlyiteriors = false);
+
 	static uint64_t Sum(std::vector<uint64_t> vec);
 };

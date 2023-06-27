@@ -1245,8 +1245,8 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 		}
 	}
 
-	if (tpltinfo && tpltinfo->tpltrace)
-		race = tpltinfo->tpltrace;
+	//if (tpltinfo && tpltinfo->tpltrace)
+	//	race = tpltinfo->tpltrace;
 	// now that we didnt't find something so far, check the rest
 	// this time all the priorities are the same
 	auto it = diseasesAssoc.find(race->GetFormID());

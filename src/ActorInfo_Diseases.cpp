@@ -304,6 +304,7 @@ bool ActorInfo::ForceIncreaseStage(Diseases::Disease value)
 		// apply effect if there is one
 		if (dis->_stages[0]->effect != nullptr)
 			AddSpell(dis->_stages[0]->effect);
+			//CastSpell(false, 0, dis->_stages[dinfo->stage]->effect);
 		//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[0]->effect, true, actor, 100, false, false, actor);
 		//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->SpellCast(false, 0, dis->_stages[0]->effect);
 		else
@@ -319,6 +320,7 @@ bool ActorInfo::ForceIncreaseStage(Diseases::Disease value)
 
 			// apply end effect
 			if (dis->endeffect != nullptr)
+				//CastSpell(false, 0, dis->_stages[dinfo->stage]->effect);
 				AddSpell(dis->endeffect);
 			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->endeffect, true, actor, 100, false, false, actor);
 			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->SpellCast(false, 0, dis->endeffect);
@@ -353,6 +355,7 @@ bool ActorInfo::ForceIncreaseStage(Diseases::Disease value)
 			// remove last effect
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
 				RemoveSpell(dis->_stages[dinfo->stage]->effect);
+				//DispelEffect(dis->_stages[dinfo->stage]->effect);
 			//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect);
 			//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 			dinfo->advPoints = 0;
@@ -361,6 +364,7 @@ bool ActorInfo::ForceIncreaseStage(Diseases::Disease value)
 			// apply effect if there is one
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
 				AddSpell(dis->_stages[dinfo->stage]->effect);
+				//CastSpell(false, 0, dis->_stages[dinfo->stage]->effect);
 			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[dinfo->stage]->effect, true, actor, 100, false, false, actor);
 			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->SpellCast(false, 0, dis->_stages[dinfo->stage]->effect);
 			else

@@ -3168,6 +3168,7 @@ void Settings::LoadDistrConfig()
 								break;
 							case 101: // disease: define infected
 								{
+									LOGLE_2("[Settings] [LoadDistrRules] Define infected rule");
 									if (splits->size() != 4) {
 										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										continue;
@@ -3212,6 +3213,7 @@ void Settings::LoadDistrConfig()
 								break;
 							case 102: // disease: define cell properties
 								{
+									LOGLE_2("[Settings] [LoadDistrRules] Define cell properties");
 									if (splits->size() != 4) {
 										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										continue;
@@ -3253,6 +3255,7 @@ void Settings::LoadDistrConfig()
 								break;
 							case 103:  // disease: define weather properties
 								{
+									LOGLE_2("[Settings] [LoadDistrRules] Define weather properties");
 									if (splits->size() != 4) {
 										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										continue;
@@ -3294,6 +3297,7 @@ void Settings::LoadDistrConfig()
 								break;
 							case 104:  // disease: define texture properties
 								{
+									LOGLE_2("[Settings] [LoadDistrRules] Define texture properties");
 									if (splits->size() != 4) {
 										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										continue;
@@ -3335,6 +3339,7 @@ void Settings::LoadDistrConfig()
 								break;
 							case 105:  // disease: define probable infection
 								{
+									LOGLE_2("[Settings] [LoadDistrRules] Define probable infections");
 									if (splits->size() != 4) {
 										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
 										continue;
@@ -3358,7 +3363,9 @@ void Settings::LoadDistrConfig()
 									bool error = false;
 									int total = 0;
 									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp, total);
+									LOGLE_2("[Settings] [LoadDistrRules] Define probable infections 0");
 									for (int i = 0; i < items.size(); i++) {
+										LOGLE_2("[Settings] [LoadDistrRules] Define probable infections 0.5");
 										switch (std::get<0>(items[i])) {
 										case Distribution::AssocType::kActor:
 										case Distribution::AssocType::kNPC:
@@ -3368,18 +3375,27 @@ void Settings::LoadDistrConfig()
 										case Distribution::AssocType::kKeyword:
 										case Distribution::AssocType::kRace:
 											{
+												LOGLE_2("[Settings] [LoadDistrRules] Define probable infections 2");
 												auto data = Data::GetSingleton();
 												auto itr = data->diseasesAssoc.find(std::get<1>(items[i]));
 												if (itr != data->diseasesAssoc.end()) {
 													if (itr->second)  // vector valid
 													{
+														LOGLE_2("[Settings] [LoadDistrRules] Define probable infections 3");
 														itr->second->push_back(disease);
 													} else  // vector not valid
 													{
+														LOGLE_2("[Settings] [LoadDistrRules] Define probable infections 4");
 														std::unique_ptr<std::vector<Diseases::Disease>> vec = std::make_unique<std::vector<Diseases::Disease>>();
 														vec->push_back(disease);
 														data->diseasesAssoc.insert_or_assign(std::get<1>(items[i]), std::move(vec));
 													}
+												} else 
+												{
+													LOGLE_2("[Settings] [LoadDistrRules] Define probable infections 4");
+													std::unique_ptr<std::vector<Diseases::Disease>> vec = std::make_unique<std::vector<Diseases::Disease>>();
+													vec->push_back(disease);
+													data->diseasesAssoc.insert_or_assign(std::get<1>(items[i]), std::move(vec));
 												}
 											}
 											break;
@@ -3414,7 +3430,8 @@ void Settings::LoadDistrConfig()
 
 
 	if (Logging::EnableLog) {
-		//logger::info("[Settings] [LoadDistrConfig] Number of Rules: {}", Distribution::rules()->size());
+		logger::info("[Settings] [LoadDistrConfig] DiseasesAssoc: {}", Data::GetSingleton()->diseasesAssoc.size());
+		logger::info("[Settings] [LoadDistrConfig] DiseasesForceAssoc: {}", Data::GetSingleton()->diseasesForceAssoc.size());
 	}
 }
 

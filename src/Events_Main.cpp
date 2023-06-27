@@ -120,7 +120,7 @@ namespace Events
 				LOG_1("{}[Events] [HandleActors] calculate ticks for all actors");
 
 				// calculate ticks for each actor and set current time as last change
-				#pragma omp parallel num_threads(4)
+#pragma omp parallel for num_threads(4) shared(currentgameday) schedule(runtime)
 				for (int x = 0; x < actors.size(); x++) {
 					actors[x]->SetDiseaseTicks((int)((currentgameday - actors[x]->GetDiseaseLastTime()) / Settings::System::_ticklength));
 					LOG4_1("{}[Events] [HandleActors] time: {}\tlast: {}\tticklength: {}\tticks: {}", currentgameday, actors[x]->GetDiseaseLastTime(), Settings::System::_ticklength, actors[x]->GetDiseaseTicks());
@@ -133,11 +133,27 @@ namespace Events
 				LOG_1("{}[Events] [HandleActors] calculate particle effects");
 
 				
-				for (int i = 0; i < Diseases::kMaxValue; i++)
-					infected[i] = UtilityAlch::GetProgressingActors(actors, static_cast<Diseases::Disease>(i));
+#pragma omp parallel num_threads(4)
+				{
+					#pragma omp master
+					allinfected = UtilityAlch::GetProgressingActors(actors);
+
+					#pragma omp for
+					for (int i = 0; i < Diseases::kMaxValue; i++)
+						infected[i] = UtilityAlch::GetProgressingActors(actors, static_cast<Diseases::Disease>(i));
+				}
 				for (int i = 0; i < Diseases::kMaxValue; i++)
 					if (infected[i].size() > 0)
 						disvals.push_back(static_cast<Diseases::Disease>(i));
+
+				// all of the following is calculated in ticks, so remove those who do not need to be processed
+				auto itra = actors.begin();
+				while (itra != actors.end()) {
+					if (itra->get()->GetDiseaseTicks() != 0) {
+						actorsreduced.push_back(*itra);
+					}
+					itra++;
+				}
 
 				PROF1_1("{}[Events] [HandleActors] execution time: Startup: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()));
 				last = std::chrono::steady_clock::now();
@@ -148,11 +164,12 @@ namespace Events
 				// 2) get those in particle range
 				// particles work in a close range distance in any cells / between cells
 				{
-					allinfected = UtilityAlch::GetProgressingActors(actors);
-					LOG2_1("{}[Events] [HandleActors] calculate particle effects. actors {}, infected {}", actors.size(), allinfected.size());
+					LOG3_1("{}[Events] [HandleActors] calculate particle effects. actors {}, infected {}, actorsreduced {}", actors.size(), allinfected.size(), actorsreduced.size());
 					// will be deleted after we leave the block
-					std::unordered_map<uint64_t /*actormashup*/, float /*distance*/> distances = UtilityAlch::GetActorDistancesMap(allinfected, actors, Settings::Disease::_particleRange);
-					LOG1_1("{}[Events] [HandleActors] calculate particle effects for {} pairs", distances.size());
+					//std::unordered_map<uint64_t /*actormashup*/, float /*distance*/> distances = UtilityAlch::GetActorDistancesMap(allinfected, actors, Settings::Disease::_particleRange);
+					auto list = UtilityAlch::GetActorDistancesList(allinfected, actorsreduced, Settings::Disease::_particleRange);
+					//LOG1_1("{}[Events] [HandleActors] calculate particle effects for {} pairs", distances.size());
+					LOG1_1("{}[Events] [HandleActors] calculate particle effects for {} pairs", list.size());
 
 					// iterate over illnesses
 					for (auto disval : disvals) {
@@ -167,93 +184,60 @@ namespace Events
 						}
 						std::shared_ptr<DiseaseStage> stage = nullptr;
 
-						// deprecated
-						/*if (particlehandling) {
-							// iterate over infected for disease
-							for (int c = 0; c < infected[i].size(); c++) {
-								float scale = 0;
-								// get disease stage of infected
-								stage = dis->_stages[infected[i][c]->dinfo->FindDisease(disval)->stage];
-								// get scaling from infectivity
-								switch (stage->_infectivity) {
-								case Infectivity::kLow:
-									scale = 0.7f;
-									break;
-								case Infectivity::kNormal:
-									scale = 1.0f;
-									break;
-								case Infectivity::kHigher:
-									scale = 1.3f;
-									break;
-								case Infectivity::kHigh:
-									scale = 1.7f;
-									break;
-								case Infectivity::kVeryHigh:
-									scale = 2.0f;
-								}
-								if (scale == 0)
-									continue;  // got to next infected instead
-								// iterate over other actors
-								for (int x = 0; x < actors.size(); x++) {
-									auto itr = distances.find((((uint64_t)infected[i][c]->actor->GetFormID()) << 32) | actors[x]->actor->GetFormID());
-									if (itr != distances.end()) {
-										//LOG3_1("{}[Events] [HandleActors] particle distance: {} & {}, distance: {}", infected[i][c]->actor->GetName(), actors[x]->actor->GetName(), itr->second);
-										// there is no iteration for the ticks here, since particle range can change very fast
-										// if chance succeeds
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kParticle]))
-											points[x] += scale * (1 - actors[x]->IgnoresDisease()) * std::get<1>(stage->_spreading[Spreading::kParticle]);
-									}
-								}
+						std::shared_ptr<ActorInfo> infec, act;
+						std::shared_ptr<DiseaseInfo> dinfo;
+						int idx2;
+						//auto iter = distances.begin();
+						//while (iter != distances.end()) {
+						//for (auto& [first, second] : list) {
+#pragma omp parallel for num_threads(4) schedule(runtime) private(infec, act, stage, dinfo) shared(dis, disval, list)
+						for (int i = 0; i < list.size(); i++) {
+							auto& [first, second] = list[i];
+							//if (iter->first >> 32 > allinfected.size() || (uint32_t)(iter->first) > actors.size()) {
+							if (first >> 32 > allinfected.size() || (uint32_t)(first) > actors.size()) {
+								//iter++;
+								continue;
 							}
-						} else */
-						{
-							std::shared_ptr<ActorInfo> infec, act;
-							std::shared_ptr<DiseaseInfo> dinfo;
-							int idx2;
-							auto iter = distances.begin();
-							while (iter != distances.end()) {
-								if (iter->first >> 32 > allinfected.size() || (uint32_t)(iter->first) > actors.size()) {
-									iter++;
-									continue;
-								}
-								infec = allinfected[iter->first >> 32];
-								dinfo = infec->FindDisease(disval);
-								if (infec->IsInfectedProgressing(disval) == false || !dinfo) {
-									iter++;
-									continue;
-								}
-								LOG2_1("{}tried to access index: {} and {}", iter->first >> 32, (uint32_t)(iter->first));
-								idx2 = (uint32_t)iter->first;
-								act = actors[idx2];
-								float scale = 0;
-								// get disease stage of infected
-								stage = dis->_stages[dinfo->stage];
-								// get scaling from infectivity
-								switch (stage->_infectivity) {
-								case Infectivity::kLow:
-									scale = 0.7f;
-									break;
-								case Infectivity::kNormal:
-									scale = 1.0f;
-									break;
-								case Infectivity::kHigher:
-									scale = 1.3f;
-									break;
-								case Infectivity::kHigh:
-									scale = 1.7f;
-									break;
-								case Infectivity::kVeryHigh:
-									scale = 2.0f;
-								}
-								scale = scale * (1 - act->IgnoresDisease());
-								if (scale == 0)
-									continue;  // got to next infected instead
-								if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kParticle])) {
-									actors[idx2]->AddDiseasePoints(disval, scale * std::get<1>(stage->_spreading[Spreading::kParticle]));
-								}
+							//infec = allinfected[iter->first >> 32];
+							infec = allinfected[first >> 32];
+							dinfo = infec->FindDisease(disval);
+							if (infec->IsInfectedProgressing(disval) == false || !dinfo) {
+								//iter++;
+								continue;
+							}
+							//LOG2_1("{}tried to access index: {} and {}", iter->first >> 32, (uint32_t)(iter->first));
+							LOG2_1("{}tried to access index: {} and {}", first >> 32, (uint32_t)(first));
+							//idx2 = (uint32_t)iter->first;
+							idx2 = (uint32_t)first;
+							act = actorsreduced[idx2];
+							float scale = 0;
+							// get disease stage of infected
+							stage = dis->_stages[dinfo->stage];
+							// get scaling from infectivity
+							switch (stage->_infectivity) {
+							case Infectivity::kLow:
+								scale = 0.7f;
+								break;
+							case Infectivity::kNormal:
+								scale = 1.0f;
+								break;
+							case Infectivity::kHigher:
+								scale = 1.3f;
+								break;
+							case Infectivity::kHigh:
+								scale = 1.7f;
+								break;
+							case Infectivity::kVeryHigh:
+								scale = 2.0f;
+							}
+							scale = scale * (1 - act->IgnoresDisease());
+							if (scale == 0)
+								continue;  // got to next infected instead
+							if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kParticle])) {
+								actorsreduced[idx2]->AddDiseasePoints(disval, scale * std::get<1>(stage->_spreading[Spreading::kParticle]));
+							}
 
-								iter++;
-							}
+							//iter++;
 						}
 					}
 				}
@@ -263,17 +247,6 @@ namespace Events
 
 				Stats::MainHandler_Particles_Times.push_back(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count());
 
-				// all of the following is calculated in ticks, so remove those who do not need to be processed
-				auto itra = actors.begin();
-				while (itra != actors.end())
-				{
-					if (itra->get()->GetDiseaseTicks() != 0)
-					{
-						actorsreduced.push_back(*itra);
-					}
-					itra++;
-				}
-
 				LOG_1("{}[Events] [HandleActors] calculate air effects");
 
 				// calculate effects occuring due to air infection
@@ -281,7 +254,7 @@ namespace Events
 				{
 					// get all npcs in the same interior spaces
 					std::unordered_map<uint32_t, std::vector<int /*idx in actors*/>> cellmates;
-					#pragma omp parallel num_threads(4)
+#pragma omp parallel for num_threads(4) schedule(runtime)
 					for (int i = 0; i < allinfected.size(); i++) {
 						// skip those in exterior cells
 						if (allinfected[i]->GetParentCell() && allinfected[i]->GetParentCell()->IsInteriorCell() == false)
@@ -355,7 +328,7 @@ namespace Events
 					}
 				}
 
-				LOG_1("{}[Events] [HandleActors] calculate static effects");
+				LOG3_1("{}[Events] [HandleActors] calculate static effects. actors {}, infected {}, actorsreduced {}", actors.size(), allinfected.size(), actorsreduced.size());
 
 				PROF1_1("{}[Events] [HandleActors] execution time: Air: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - last).count()));
 				last = std::chrono::steady_clock::now();
@@ -373,36 +346,20 @@ namespace Events
 					}
 					std::shared_ptr<DiseaseStage> stage = nullptr;
 					// iterate actorsreduced
-					#pragma omp parallel private (stage) num_threads(4)
+#pragma omp parallel for private(stage) num_threads(4) schedule(runtime) shared(disval, dis, actorsreduced)
 					for (int x = 0; x < actorsreduced.size(); x++) {
-						//LOG1_1("{}[Events] [HandleActors] actor: {}", actorsreduced[x]->GetName());
+						LOG1_1("{}[Events] [HandleActors] actor: {}", actorsreduced[x]->GetName());
 						auto dinfo = actorsreduced[x]->FindDisease(disval);
 						if (!dinfo)
 							stage = dis->_stageInfection;
 						else
 							stage = dis->_stages[dinfo->stage];
 						// calc actor point scaling
-						float scale = 0;
-						switch (stage->_infectivity) {
-						case Infectivity::kLow:
-							scale = 0.7f;
-							break;
-						case Infectivity::kNormal:
-							scale = 1.0f;
-							break;
-						case Infectivity::kHigher:
-							scale = 1.3f;
-							break;
-						case Infectivity::kHigh:
-							scale = 1.7f;
-							break;
-						case Infectivity::kVeryHigh:
-							scale = 2.0f;
-						}
+						float scale = 1;
 						scale = scale * (1 - actorsreduced[x]->IgnoresDisease());
 						int ticks = actorsreduced[x]->GetDiseaseTicks();
 						float points = 0;
-						//LOG2_1("{}[Events] [HandleActors] base, ticks: {}, scale: {}", ticks[x], scale);
+						LOG2_1("{}[Events] [HandleActors] base, ticks: {}, scale: {}", ticks, scale);
 						if (scale > 0.0f) {
 							//LOG1_1("{}[Events] [HandleActors] base, ticks: {}", ticks[x]);
 							// iterate ticks
@@ -547,7 +504,11 @@ namespace Events
 									points += ((float)std::get<0>(stage->_spreading[Spreading::kExtremeConditions]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kInSwamp]) * ticks;
 								}
 							}
+						}
 
+						// handle static progression effects
+						if (dinfo && dinfo->status == DiseaseStatus::kProgressing) {
+							points += (1 - actors[x]->IgnoresDisease()) * dis->_baseProgressionPoints * ticks;
 						}
 						if (dinfo && dinfo->permanentModifiersPoints != 0)
 							points += dinfo->permanentModifiersPoints * ticks;
@@ -558,7 +519,7 @@ namespace Events
 				PROF1_1("{}[Events] [HandleActors] execution time: Static: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - last).count()));
 				last = std::chrono::steady_clock::now();
 
-				#pragma omp parallel num_threads(4)
+				#pragma omp parallel for num_threads(4) schedule(runtime)
 				for (int i = 0; i < actors.size(); i++)
 				{
 					actors[i]->ProgressAllDiseases();
@@ -585,9 +546,9 @@ namespace Events
 				uint64_t runtime = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count();
 
 				// stat tracking
-				if (actors.size() > Stats::MainHandler_ActorsHandled)
+				if (actors.size())
 					Stats::MainHandler_ActorsHandled = actors.size();
-				if (runtime > Stats::MainHandler_TimeTaken)
+				if (runtime)
 					Stats::MainHandler_TimeTaken = runtime;
 				Stats::MainHandler_ActorsHandledTotal += actors.size();
 
@@ -597,6 +558,7 @@ namespace Events
 
 				// reset lists for next iteration
 				actors.clear();
+				actorsreduced.clear();
 				for (int i = 0; i < Diseases::kMaxValue; i++)
 					infected[i].clear();
 				allinfected.clear();

@@ -1,4 +1,5 @@
 #include "Random.h"
+#include "Threading.h"
 #include "UtilityAlch.h"
 
 #include <omp.h>
@@ -321,7 +322,7 @@ std::unordered_map<uint64_t /*actormashup*/, float /*distance*/> UtilityAlch::Ge
 	RE::TESObjectCELL* cell = nullptr;
 	RE::TESObjectCELL* cell2 = nullptr;
 	// iterate over actors
-#pragma omp parallel for private(cell, cell2, distance) num_threads(4)
+#pragma omp parallel for private(cell, cell2, distance) num_threads(4) schedule(runtime)
 	for (int i = 0; i < actors1.size(); i++) {
 		// create empty new vector
 		// iterate over all actors in the second list
@@ -381,6 +382,86 @@ std::unordered_map<uint64_t /*actormashup*/, float /*distance*/> UtilityAlch::Ge
 					#pragma omp critical (UtilityAlchGetActorDistancesMap)
 					{
 						distances.insert_or_assign((((uint64_t)i) << 32) | (uint64_t)c, distance);
+					}
+				}
+			}
+		}
+	}
+	return distances;
+}
+
+std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> UtilityAlch::GetActorDistancesList(std::vector<std::shared_ptr<ActorInfo>> actors1, std::vector<std::shared_ptr<ActorInfo>> actors2, float distancethreshold, bool onlyiteriors)
+{
+	std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> distances;
+	float distance = 0.0f;
+	RE::TESObjectCELL* cell = nullptr;
+	RE::TESObjectCELL* cell2 = nullptr;
+	distancethreshold *= distancethreshold;
+	std::atomic_flag lock = ATOMIC_FLAG_INIT;
+	// iterate over actors
+#pragma omp parallel for private(cell, cell2, distance) num_threads(4) schedule(runtime)
+	for (int i = 0; i < actors1.size(); i++) {
+		// create empty new vector
+		// iterate over all actors in the second list
+		for (int c = 0; c < actors2.size(); c++) {
+			// skip if actors are the same
+			if (actors1[i]->GetFormID() == actors2[c]->GetFormID())
+				continue;
+			// calc distance
+
+			// if actors in same worldspace -> calc distance directly
+			// if actors in exterior / interior -> set to max value
+
+			// if cells have same interior cell flag
+			cell = actors1[i]->GetParentCell();
+			cell2 = actors2[c]->GetParentCell();
+			if (cell != nullptr && cell2 != nullptr) {
+				if (!onlyiteriors && cell->IsInteriorCell() == cell2->IsInteriorCell()) {
+					// if it actually is an interior cell, check whether its the same
+					if (cell->IsInteriorCell()) {
+						if (cell->GetFormID() == cell2->GetFormID()) {
+							//distance = sqrtf(actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
+							distance = (actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
+							LOG3_5("{}calc, {}, {}, {}", Utility::PrintForm(actors1[i]), Utility::PrintForm(actors2[c]), distance);
+						}
+						// if its not the same set ifinity
+						else {
+							distance = FLT_MAX;
+						}
+					} else {
+						// is exterior cell: check wordspace
+						if (actors1[i]->GetWorldspaceID() == actors2[c]->GetWorldspaceID()) {
+							// same worldspace
+							//distance = sqrtf(actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
+							distance = (actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
+						} else {
+							// different worlspace, set to infinity
+							distance = FLT_MAX;
+						}
+					}
+				} else if (onlyiteriors) {
+					if (cell->IsInteriorCell()) {
+						if (cell->GetFormID() == cell2->GetFormID()) {
+							//distance = sqrtf(actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
+							distance = (actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
+						}
+						// if its not the same set ifinity
+						else {
+							distance = FLT_MAX;
+						}
+					}
+				} else {
+					// different cell types, set to infinity
+					distance = FLT_MAX;
+				}
+				//LOG3_1("{}[UtilityAlch] [GetActorDistancesMap] actor1: {},\tactor2: {},\tdistance: {}", actors1[i]->actor->GetName(), actors2[c]->actor->GetName(), distance);
+				// add to vector if distancethreshol holds
+				if (distance < distancethreshold) {
+// the entry is actorid1 concat actor1d2 -> actorid1 = 0x1, actorid2 = 0x30 -> 0x0000000100000030
+//distances.insert_or_assign((((uint64_t)actors1[i]->GetFormID()) << 32) | actors2[c]->GetFormID(), distance);
+					{
+						Spinlock guard(lock);
+						distances.push_back({ (((uint64_t)i) << 32) | (uint64_t)c, distance });
 					}
 				}
 			}

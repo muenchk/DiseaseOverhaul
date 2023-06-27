@@ -20,6 +20,8 @@ ActorInfo::ActorInfo(RE::Actor* _actor)
 		diseases[i].reset();
 		diseasepoints[i] = 0;
 	}
+	LastGameTime = 0;
+	currentticks = 0;
 	CalcDiseaseFlags();
 	if (_actor) {
 		formid.SetID(_actor->GetFormID());
@@ -82,6 +84,8 @@ void ActorInfo::Reset(RE::Actor* _actor)
 		diseases[i].reset();
 		diseasepoints[i] = 0;
 	}
+	LastGameTime = 0;
+	currentticks = 0;
 	CalcDiseaseFlags();
 	if (_actor) {
 		formid.SetID(_actor->GetFormID());

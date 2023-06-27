@@ -406,7 +406,7 @@ TESDeathEventEnd:
 					// print disease information
 					if (target) {
 						std::shared_ptr<ActorInfo> acinfo = Main::data->FindActor(target);
-						console->Print((std::string("AlchExt: Printing target information: \t") + target->GetName()).c_str());
+						console->Print((std::string("AlchExt: Printing target information: \t") + Utility::PrintFormNonDebug(acinfo->GetActor())).c_str());
 						console->Print((std::string("Vampire: \t\t") + std::to_string(acinfo->IsVampire())).c_str());
 						console->Print((std::string("Automaton: \t\t") + std::to_string(acinfo->IsAutomaton())).c_str());
 						console->Print((std::string("Werewolf: \t\t") + std::to_string(acinfo->IsWerewolf())).c_str());

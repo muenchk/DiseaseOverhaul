@@ -1107,6 +1107,7 @@ int Data::GetPoisonDosage(RE::AlchemyItem* poison)
 
 void Data::AddDiseaseStage(std::shared_ptr<DiseaseStage> stage, uint16_t stageid)
 {
+	stage->CalcFlags();
 	diseaseStagesMap.insert_or_assign(stageid, stage);
 }
 

@@ -4,7 +4,9 @@
 #include <unordered_set>
 
 #include "ActorInfo.h"
+#include "CellInfo.h"
 #include "Misc.h"
+#include "WeatherInfo.h"
 
 class Data
 {

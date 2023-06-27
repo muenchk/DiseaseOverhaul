@@ -1,40 +1,54 @@
-#include "DiseaseStats.h"
-#include "Data.h"
-#include "Random.h"
-#include "Logging.h"
-#include "Stats.h"
+#include "ActorInfo.h"
 #include "Settings.h"
+#include "UtilityAlch.h"
+#include "Distribution.h"
+#include "BufferOperations.h"
+#include "ActorManipulation.h"
+#include "Random.h"
+#include "Stats.h"
 
-#include <omp.h>
+#pragma region Disease
 
-namespace DisSta
+void ActorInfo::DeleteDisease(Diseases::Disease value)
 {
-	Data* data = nullptr;
-}
-
-DiseaseInfo* DiseaseStats::FindDisease(Diseases::Disease value)
-{
-	for (int i = 0; i < diseases.size(); i++) {
-		if (diseases[i] && diseases[i]->disease == value)
-			return diseases[i];
+	auto dinfo = diseases[value];
+	if (dinfo != nullptr) {
+		diseases[value].reset();
 	}
-	return nullptr;
 }
 
-
-bool DiseaseStats::ProgressDisease(std::shared_ptr<ActorInfo> acinfo, Diseases::Disease value, float points)
+void ActorInfo::AddDiseasePoints(Diseases::Disease disval, float points)
 {
-	if (!acinfo->IsValid())
+#pragma omp atomic update
+	diseasepoints[disval] += points;
+}
+
+bool ActorInfo::ProgressAllDiseases()
+{
+	bool kill = false;
+	for (int i = 0; i < Diseases::kMaxValue; i++) {
+		if (diseasepoints[i] > 0)
+			kill |= ProgressDisease(static_cast<Diseases::Disease>(i), diseasepoints[i]);
+		diseasepoints[i] = 0;
+	}
+	return kill;
+}
+std::shared_ptr<DiseaseInfo> ActorInfo::FindDisease(Diseases::Disease value)
+{
+	return diseases[value];
+}
+
+bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
+{
+	if (!valid || dead)
 		return false;
 
-	LOG_3("{}[DiseaseStats] [ProgressDisease]");
+	LOG3_3("{}[ActorInfo] [ProgressDisease] actor: {},disease: {}, points: {}", _formstring, UtilityAlch::ToString(value), points);
 
 	// stat tracking
 	Stats::DiseaseStats_ProgressDisease++;
 
 	// init data if not already happened
-	if (DisSta::data == nullptr)
-		DisSta::data = Data::GetSingleton();
 
 	bool killac = false;
 
@@ -42,12 +56,12 @@ bool DiseaseStats::ProgressDisease(std::shared_ptr<ActorInfo> acinfo, Diseases::
 	if (points == 0)
 		return false;
 
-	DiseaseInfo* dinfo = FindDisease(value);
-	if (dinfo == nullptr) {
+	std::shared_ptr<DiseaseInfo> dinfo = FindDisease(value);
+	if (!dinfo) {
 		// if there is no disease info and we want to loose points, then there is no meaning in creating info at all
 		if (points < 0)
 			return false;
-		dinfo = new DiseaseInfo();
+		dinfo = std::make_shared<DiseaseInfo>();
 		dinfo->advPoints = 0;
 		dinfo->disease = value;
 		dinfo->earliestAdvancement = 0;
@@ -56,7 +70,7 @@ bool DiseaseStats::ProgressDisease(std::shared_ptr<ActorInfo> acinfo, Diseases::
 		dinfo->permanentModifiersPoints = 0;
 		dinfo->stage = 0;
 		dinfo->status = DiseaseStatus::kInfection;
-		diseases.push_back(dinfo);
+		diseases[value] = dinfo;
 	}
 
 	float currentgameday = RE::Calendar::GetSingleton()->GetDaysPassed();
@@ -65,20 +79,18 @@ bool DiseaseStats::ProgressDisease(std::shared_ptr<ActorInfo> acinfo, Diseases::
 	if (dinfo->immuneUntil > currentgameday)
 		return false;
 
-	LOG_4("{}[DiseaseStats] [ProgressDisease] start work");
-
-	RE::ActorHandle achandle = acinfo->GetHandle();
+	LOG_4("{}[ActorInfo] [ProgressDisease] start work");
 
 	// do actual work
-	std::shared_ptr<Disease> dis = DisSta::data->GetDisease(value);
+	std::shared_ptr<Disease> dis = data->GetDisease(value);
 	dinfo->advPoints += points;
 	switch (dinfo->status) {
 	case DiseaseStatus::kInfection:
-		LOG_4("{}[DiseaseStats] [ProgressDisease] Infection");
+		LOG_4("{}[ActorInfo] [ProgressDisease] Infection");
 		// infection stage means no effects
 		// we have to check whether we jump out of infection stage and calculate effects
 		if (dinfo->advPoints > dis->_stageInfection->_advancementThreshold) {
-			LOG_4("{}[DiseaseStats] [ProgressDisease] advance");
+			LOG_4("{}[ActorInfo] [ProgressDisease] advance");
 			// advance to incubation
 			dinfo->stage = 0;
 			dinfo->status = DiseaseStatus::kProgressing;
@@ -91,37 +103,29 @@ bool DiseaseStats::ProgressDisease(std::shared_ptr<ActorInfo> acinfo, Diseases::
 			dinfo->permanentModifiersPoints = 0;
 			// apply effect if there is one
 			if (dis->_stages[0]->effect != nullptr)
-				acinfo->AddSpell(dis->_stages[dinfo->stage]->effect);
-				//acinfo->CastSpell(false, 0, dis->_stages[0]->effect);
+				AddSpell(dis->_stages[dinfo->stage]->effect);
+			//acinfo->CastSpell(false, 0, dis->_stages[0]->effect);
 			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[0]->effect, true, actor, 100, false, false, actor);
 		} else if (dinfo->advPoints <= 0) {
-			LOG_4("{}[DiseaseStats] [ProgressDisease] delete info");
+			LOG_4("{}[ActorInfo] [ProgressDisease] delete info");
 			// we had a regressing effect, so go down stages
 			// in essence we don't have an infection anymore, so remove dieseaseinfo
-			auto itr = diseases.begin();
-			while (itr != diseases.end()) {
-				if ((*itr)->disease == value) {
-					diseases.erase(itr);
-					delete dinfo;
-					return false;  // go straight out since we are done
-				}
-				itr++;
-			}
+			DeleteDisease(value);
 		}
 		break;
 	case DiseaseStatus::kProgressing:
-		LOG_4("{}[DiseaseStats] [ProgressDisease] Progressing");
+		LOG_4("{}[ActorInfo] [ProgressDisease] Progressing");
 		// this is more tricky, first check current stage and then advancement
 		if (dinfo->advPoints > dis->_stages[dinfo->stage]->_advancementThreshold) {
 			// try advance stage
 			// if we have reached the maximum stage, calculate endeffects set return value to true if actor should die and then calculate rest as normal
 			if (dinfo->stage == dis->_numstages) {
-				LOG_4("{}[DiseaseStats] [ProgressDisease] max stage exceeded");
+				LOG_4("{}[ActorInfo] [ProgressDisease] max stage exceeded");
 				// calculate end effects
 
 				// apply end effect
 				if (dis->endeffect != nullptr)
-					acinfo->AddSpell(dis->_stages[dinfo->stage]->effect);
+					AddSpell(dis->_stages[dinfo->stage]->effect);
 				//acinfo->CastSpell(false, 0, dis->endeffect);
 				//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->endeffect, true, actor, 100, false, false, actor);
 				// apply endevents
@@ -150,11 +154,11 @@ bool DiseaseStats::ProgressDisease(std::shared_ptr<ActorInfo> acinfo, Diseases::
 				}
 
 			} else if (currentgameday > dinfo->earliestAdvancement || Settings::Disease::_ignoreTimeAdvancementConstraint) {
-				LOG_4("{}[DiseaseStats] [ProgressDisease] advance");
+				LOG_4("{}[ActorInfo] [ProgressDisease] advance");
 				// advance to next stage
 				// remove last effect
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					acinfo->RemoveSpell(dis->_stages[dinfo->stage]->effect);
+					RemoveSpell(dis->_stages[dinfo->stage]->effect);
 				//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect);
 				//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 				if (dinfo->stage == 0)  //we are in incubation stage
@@ -174,7 +178,7 @@ bool DiseaseStats::ProgressDisease(std::shared_ptr<ActorInfo> acinfo, Diseases::
 				dinfo->earliestAdvancement = currentgameday + dis->_stages[dinfo->stage]->_advancementTime;
 				// apply effect if there is one
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					acinfo->AddSpell(dis->_stages[dinfo->stage]->effect);
+					AddSpell(dis->_stages[dinfo->stage]->effect);
 				//acinfo->CastSpell(false, 0, dis->_stages[dinfo->stage]->effect);
 				//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[dinfo->stage]->effect, true, actor, 100, false, false, actor);
 			}
@@ -182,7 +186,7 @@ bool DiseaseStats::ProgressDisease(std::shared_ptr<ActorInfo> acinfo, Diseases::
 		} else if (dinfo->advPoints < 0) {
 			// we had a regressing effect so go down stages
 			if (dinfo->stage <= 1) {  // incubation stage does not exist for regression
-				LOG_4("{}[DiseaseStats] [ProgressDisease] gain immunity");
+				LOG_4("{}[ActorInfo] [ProgressDisease] gain immunity");
 				// we are already in the lowest stage, so go back to infection and gain immunity
 				dinfo->status = DiseaseStatus::kInfection;
 				dinfo->earliestAdvancement = 0;
@@ -191,34 +195,34 @@ bool DiseaseStats::ProgressDisease(std::shared_ptr<ActorInfo> acinfo, Diseases::
 				dinfo->permanentModifiersPoints = 0;
 				// remove effect
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					acinfo->RemoveSpell(dis->_stages[dinfo->stage]->effect);
+					RemoveSpell(dis->_stages[dinfo->stage]->effect);
 				//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect);
 				//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 			} else {
-				LOG_4("{}[DiseaseStats] [ProgressDisease] devance");
+				LOG_4("{}[ActorInfo] [ProgressDisease] devance");
 				// we just regress one stage
 				// remove last effect
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					acinfo->RemoveSpell(dis->_stages[dinfo->stage]->effect);
+					RemoveSpell(dis->_stages[dinfo->stage]->effect);
 				//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect);
 				//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 				dinfo->stage--;
 				dinfo->advPoints = (float)dis->_stages[dinfo->stage]->_advancementThreshold;
 				// apply effect if there is one
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					acinfo->AddSpell(dis->_stages[dinfo->stage]->effect);
+					AddSpell(dis->_stages[dinfo->stage]->effect);
 				//acinfo->CastSpell(false, 0, dis->_stages[dinfo->stage]->effect);
 				//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[dinfo->stage]->effect, true, actor, 100, false, false, actor);
 			}
 		}
 		break;
 	case DiseaseStatus::kRegressing:
-		LOG_4("{}[DiseaseStats] [ProgressDisease] Regressing");
+		LOG_4("{}[ActorInfo] [ProgressDisease] Regressing");
 		// if you are regressing you cannot progress anymore, even if you were to gain advPoints
 		if (dinfo->advPoints < 0) {
 			// we had a regressing effect so go down stages
 			if (dinfo->stage <= 1) {  // incubation stage does not exist for regression
-				LOG_4("{}[DiseaseStats] [ProgressDisease] gain immunity");
+				LOG_4("{}[ActorInfo] [ProgressDisease] gain immunity");
 				// we are already in the lowest stage, so go back to infection and gain immunity
 				dinfo->status = DiseaseStatus::kInfection;
 				dinfo->earliestAdvancement = 0;
@@ -227,22 +231,22 @@ bool DiseaseStats::ProgressDisease(std::shared_ptr<ActorInfo> acinfo, Diseases::
 				dinfo->permanentModifiersPoints = 0;
 				// remove effect
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					acinfo->RemoveSpell(dis->_stages[dinfo->stage]->effect);
+					RemoveSpell(dis->_stages[dinfo->stage]->effect);
 				//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect);
 				//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 			} else {
-				LOG_4("{}[DiseaseStats] [ProgressDisease] devance");
+				LOG_4("{}[ActorInfo] [ProgressDisease] devance");
 				// we just regress one stage
 				// remove last effect
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					acinfo->RemoveSpell(dis->_stages[dinfo->stage]->effect);
+					RemoveSpell(dis->_stages[dinfo->stage]->effect);
 				//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect);
 				//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 				dinfo->stage--;
 				dinfo->advPoints = (float)dis->_stages[dinfo->stage]->_advancementThreshold;
 				// apply effect if there is one
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
-					acinfo->AddSpell(dis->_stages[dinfo->stage]->effect);
+					AddSpell(dis->_stages[dinfo->stage]->effect);
 				//acinfo->CastSpell(false, 0, dis->_stages[dinfo->stage]->effect);
 				//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[dinfo->stage]->effect, true, actor, 100, false, false, actor);
 			}
@@ -250,22 +254,20 @@ bool DiseaseStats::ProgressDisease(std::shared_ptr<ActorInfo> acinfo, Diseases::
 		break;
 	}
 
-	CalcFlags();
-	LOG_4("{}[DiseaseStats] [ProgressDisease] end");
+	CalcDiseaseFlags();
+	LOG_4("{}[ActorInfo] [ProgressDisease] end");
 	return killac;
 }
 
-bool DiseaseStats::ForceIncreaseStage(std::shared_ptr<ActorInfo> acinfo, Diseases::Disease value)
+bool ActorInfo::ForceIncreaseStage(Diseases::Disease value)
 {
-	LOG_2("{}[DiseaseStats] [ForceIncreaseStage]");
-	if (DisSta::data == nullptr)
-		DisSta::data = Data::GetSingleton();
+	LOG_2("{}[ActorInfo] [ForceIncreaseStage]");
 
 	bool killac = false;
 
-	DiseaseInfo* dinfo = FindDisease(value);
-	if (dinfo == nullptr) {
-		dinfo = new DiseaseInfo();
+	std::shared_ptr<DiseaseInfo> dinfo = FindDisease(value);
+	if (!dinfo) {
+		dinfo = std::make_shared<DiseaseInfo>();
 		dinfo->advPoints = 0;
 		dinfo->disease = value;
 		dinfo->earliestAdvancement = 0;
@@ -274,56 +276,54 @@ bool DiseaseStats::ForceIncreaseStage(std::shared_ptr<ActorInfo> acinfo, Disease
 		dinfo->permanentModifiersPoints = 0;
 		dinfo->stage = 0;
 		dinfo->status = DiseaseStatus::kInfection;
-		diseases.push_back(dinfo);
+		diseases[value] = dinfo;
 	}
 
 	float currentgameday = RE::Calendar::GetSingleton()->GetDaysPassed();
 
-	RE::ActorHandle achandle = acinfo->GetHandle();
-
 	// do actual work
-	std::shared_ptr<Disease> dis = DisSta::data->GetDisease(value);
+	std::shared_ptr<Disease> dis = data->GetDisease(value);
 	switch (dinfo->status) {
 	case DiseaseStatus::kInfection:
-		LOG_4("{}[DiseaseStats] [ForceIncreaseStage] Infection");
-		LOG_4("{}[DiseaseStats] [ForceIncreaseStage] advance");
+		LOG_4("{}[ActorInfo] [ForceIncreaseStage] Infection");
+		LOG_4("{}[ActorInfo] [ForceIncreaseStage] advance");
 		// advance to incubation
 		dinfo->stage = 0;
-		LOG_4("{}[DiseaseStats] [ForceIncreaseStage] 1");
+		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 1");
 		dinfo->status = DiseaseStatus::kProgressing;
-		LOG_4("{}[DiseaseStats] [ForceIncreaseStage] 2");
+		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 2");
 		dinfo->advPoints = 0;
-		LOG1_4("{}[DiseaseStats] [ForceIncreaseStage] 3 {}", (uint64_t)dis->_stages);
-		LOG_4("{}[DiseaseStats] [ForceIncreaseStage] 4");
+		LOG1_4("{}[ActorInfo] [ForceIncreaseStage] 3 {}", (uint64_t)dis->_stages);
+		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 4");
 		dinfo->earliestAdvancement = currentgameday + dis->_stages[0]->_advancementTime;
-		LOG_4("{}[DiseaseStats] [ForceIncreaseStage] 5");
+		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 5");
 		dinfo->permanentModifiers = 0;
-		LOG_4("{}[DiseaseStats] [ForceIncreaseStage] 6");
+		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 6");
 		dinfo->permanentModifiersPoints = 0;
-		LOG_4("{}[DiseaseStats] [ForceIncreaseStage] 7");
+		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 7");
 		// apply effect if there is one
 		if (dis->_stages[0]->effect != nullptr)
-			acinfo->AddSpell(dis->_stages[0]->effect);
-			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[0]->effect, true, actor, 100, false, false, actor);
-			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->SpellCast(false, 0, dis->_stages[0]->effect);
+			AddSpell(dis->_stages[0]->effect);
+		//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[0]->effect, true, actor, 100, false, false, actor);
+		//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->SpellCast(false, 0, dis->_stages[0]->effect);
 		else
-			LOG_4("{}[DiseaseStats] [ForceIncreaseStage] the stage does not have any effect");
-		LOG_4("{}[DiseaseStats] [ForceIncreaseStage] 8");
+			LOG_4("{}[ActorInfo] [ForceIncreaseStage] the stage does not have any effect");
+		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 8");
 		break;
 	case DiseaseStatus::kProgressing:
 	case DiseaseStatus::kRegressing:
-		LOG_4("{}[DiseaseStats] [ForceIncreaseStage] Gressing");
+		LOG_4("{}[ActorInfo] [ForceIncreaseStage] Gressing");
 		if (dinfo->stage == dis->_numstages) {
-			LOG_4("{}[DiseaseStats] [ForceIncreaseStage] max stage exceeded");
+			LOG_4("{}[ActorInfo] [ForceIncreaseStage] max stage exceeded");
 			// calculate end effects
 
 			// apply end effect
 			if (dis->endeffect != nullptr)
-				acinfo->AddSpell(dis->endeffect);
-				//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->endeffect, true, actor, 100, false, false, actor);
-				//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->SpellCast(false, 0, dis->endeffect);
+				AddSpell(dis->endeffect);
+			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->endeffect, true, actor, 100, false, false, actor);
+			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->SpellCast(false, 0, dis->endeffect);
 			else
-				LOG_4("{}[DiseaseStats] [ForceIncreaseStage] there is no endeffect");
+				LOG_4("{}[ActorInfo] [ForceIncreaseStage] there is no endeffect");
 			// apply endevents
 			if (dis->endevents & DiseaseEndEvents::kDie100) {
 				killac = true;
@@ -348,42 +348,40 @@ bool DiseaseStats::ForceIncreaseStage(std::shared_ptr<ActorInfo> acinfo, Disease
 			// dont't change anything else, we are regressing from the current point
 
 		} else {
-			LOG_4("{}[DiseaseStats] [ForceIncreaseStage] advance");
+			LOG_4("{}[ActorInfo] [ForceIncreaseStage] advance");
 			// advance to next stage
 			// remove last effect
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
-				acinfo->RemoveSpell(dis->_stages[dinfo->stage]->effect);
-				//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect);
-				//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
+				RemoveSpell(dis->_stages[dinfo->stage]->effect);
+			//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect);
+			//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 			dinfo->advPoints = 0;
 			dinfo->stage++;
 			dinfo->earliestAdvancement = currentgameday + dis->_stages[dinfo->stage]->_advancementTime;
 			// apply effect if there is one
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
-				acinfo->AddSpell(dis->_stages[dinfo->stage]->effect);
-				//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[dinfo->stage]->effect, true, actor, 100, false, false, actor);
-				//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->SpellCast(false, 0, dis->_stages[dinfo->stage]->effect);
+				AddSpell(dis->_stages[dinfo->stage]->effect);
+			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[dinfo->stage]->effect, true, actor, 100, false, false, actor);
+			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->SpellCast(false, 0, dis->_stages[dinfo->stage]->effect);
 			else
-				LOG_4("{}[DiseaseStats] [ForceIncreaseStage] the stage does not have any effect");
+				LOG_4("{}[ActorInfo] [ForceIncreaseStage] the stage does not have any effect");
 		}
 		break;
 	}
-	CalcFlags();
-	LOG_4("{}[DiseaseStats] [ForceIncreaseStage] end");
+	CalcDiseaseFlags();
+	LOG_4("{}[ActorInfo] [ForceIncreaseStage] end");
 	return killac;
 }
 
-void DiseaseStats::ForceDecreaseStage(std::shared_ptr<ActorInfo> acinfo, Diseases::Disease value)
+void ActorInfo::ForceDecreaseStage(Diseases::Disease value)
 {
-	LOG_2("{}[DiseaseStats] [ForceDecreaseStage]");
-	if (DisSta::data == nullptr)
-		DisSta::data = Data::GetSingleton();
+	LOG_2("{}[ActorInfo] [ForceDecreaseStage]");
 
 	bool killac = false;
 
-	DiseaseInfo* dinfo = FindDisease(value);
-	if (dinfo == nullptr) {
-		dinfo = new DiseaseInfo();
+	std::shared_ptr<DiseaseInfo> dinfo = FindDisease(value);
+	if (!dinfo) {
+		dinfo = std::make_shared<DiseaseInfo>();
 		dinfo->advPoints = 0;
 		dinfo->disease = value;
 		dinfo->earliestAdvancement = 0;
@@ -396,35 +394,23 @@ void DiseaseStats::ForceDecreaseStage(std::shared_ptr<ActorInfo> acinfo, Disease
 
 	float currentgameday = RE::Calendar::GetSingleton()->GetDaysPassed();
 
-	RE::ActorHandle achandle = acinfo->GetHandle();
-
 	// do actual work
-	std::shared_ptr<Disease> dis = DisSta::data->GetDisease(value);
+	std::shared_ptr<Disease> dis = data->GetDisease(value);
 	switch (dinfo->status) {
 	case DiseaseStatus::kInfection:
-		LOG_4("{}[DiseaseStats] [ForceDecreaseStage] Infection");
-		LOG_4("{}[DiseaseStats] [ForceDecreaseStage] delete info");
+		LOG_4("{}[ActorInfo] [ForceDecreaseStage] Infection");
+		LOG_4("{}[ActorInfo] [ForceDecreaseStage] delete info");
 		{
 			// we had a regressing effect, so go down stages
 			// in essence we don't have an infection anymore, so remove dieseaseinfo
-			auto itr = diseases.begin();
-			while (itr != diseases.end()) {
-				if ((*itr)->disease == value) {
-					{
-						diseases.erase(itr);
-						delete dinfo;
-						return;  // go straight out since we are done
-					}
-					itr++;
-				}
-			}
+			DeleteDisease(value);
 		}
 		break;
 	case DiseaseStatus::kProgressing:
 	case DiseaseStatus::kRegressing:
-		LOG_4("{}[DiseaseStats] [ForceDecreaseStage] Gressing");
+		LOG_4("{}[ActorInfo] [ForceDecreaseStage] Gressing");
 		if (dinfo->stage <= 1) {  // incubation stage does not exist for regression
-			LOG_4("{}[DiseaseStats] [ForceDecreaseStage] gain immunity");
+			LOG_4("{}[ActorInfo] [ForceDecreaseStage] gain immunity");
 			// we are already in the lowest stage, so go back to infection and gain immunity
 			dinfo->status = DiseaseStatus::kInfection;
 			dinfo->earliestAdvancement = 0;
@@ -433,79 +419,84 @@ void DiseaseStats::ForceDecreaseStage(std::shared_ptr<ActorInfo> acinfo, Disease
 			dinfo->permanentModifiersPoints = 0;
 			// remove effect
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
-				acinfo->RemoveSpell(dis->_stages[dinfo->stage]->effect);
-				//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
+				RemoveSpell(dis->_stages[dinfo->stage]->effect);
+			//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 		} else {
-			LOG_4("{}[DiseaseStats] [ForceDecreaseStage] devance");
+			LOG_4("{}[ActorInfo] [ForceDecreaseStage] devance");
 			// we just regress one stage
 			// remove last effect
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
-				acinfo->RemoveSpell(dis->_stages[dinfo->stage]->effect);
-				//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
+				RemoveSpell(dis->_stages[dinfo->stage]->effect);
+			//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 			dinfo->stage--;
 			dinfo->advPoints = (float)dis->_stages[dinfo->stage]->_advancementThreshold;
 			// apply effect if there is one
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
-				acinfo->AddSpell(dis->_stages[dinfo->stage]->effect);
-				//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[dinfo->stage]->effect, true, actor, 100, false, false, actor);
+				AddSpell(dis->_stages[dinfo->stage]->effect);
+			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[dinfo->stage]->effect, true, actor, 100, false, false, actor);
 		}
 		break;
 	}
-	CalcFlags();
-	LOG_4("{}[DiseaseStats] [ForceDecreaseStage] end");
+	CalcDiseaseFlags();
+	LOG_4("{}[ActorInfo] [ForceDecreaseStage] end");
 }
 
-bool DiseaseStats::IsInfected()
+bool ActorInfo::IsInfected()
 {
 	return disflags > 0;
 }
 
-bool DiseaseStats::IsInfected(Diseases::Disease dis)
+bool ActorInfo::IsInfected(Diseases::Disease dis)
 {
-	return disflags & (dis + 1);
+	return (disflags & ((uint64_t)1 << static_cast<EnumType>(dis))) > 0;
 }
 
-bool DiseaseStats::IsInfectedProgressing(Diseases::Disease dis)
+bool ActorInfo::IsInfectedProgressing()
 {
-	return disflagsprog & (dis + 1);
+	return disflagsprog > 0;
 }
 
-void DiseaseStats::CleanDiseases()
+bool ActorInfo::IsInfectedProgressing(Diseases::Disease dis)
 {
-	auto itr = diseases.begin();
-	DiseaseInfo* dinfo = nullptr;
-	while (itr != diseases.end())
-	{
-		dinfo = *itr;
-		if (dinfo->status == DiseaseStatus::kInfection && RE::Calendar::GetSingleton()->GetDaysPassed() > dinfo->immuneUntil && dinfo->advPoints == 0) {
-			delete dinfo;
-			diseases.erase(itr);
-		}
-		itr++;
-	}
+	return (disflagsprog & ((uint64_t)1 << static_cast<EnumType>(dis))) > 0;
 }
 
-void DiseaseStats::CalcFlags()
+void ActorInfo::CleanDiseases()
 {
-	disflags = 0;
-	disflagsprog = 0;
-	for (auto dis : diseases)
-	{
-		if (dis->status == DiseaseStatus::kProgressing) {
-			disflags = disflags | (dis->disease + 1);
-			disflagsprog = disflagsprog | (dis->disease + 1);
-		} else if (dis->status == DiseaseStatus::kRegressing) {
-			disflags = disflags | (dis->disease + 1);
+	for (int i = 0; i < Diseases::kMaxValue; i++){
+		auto dinfo = diseases[i];
+		if (dinfo != nullptr && dinfo->status == DiseaseStatus::kInfection && RE::Calendar::GetSingleton()->GetDaysPassed() > dinfo->immuneUntil && dinfo->advPoints == 0) {
+			diseases[i].reset();
 		}
 	}
 }
 
-void DiseaseStats::Reset()
+void ActorInfo::CalcDiseaseFlags()
 {
-	for (int i = 0; i < diseases.size(); i++) {
-		delete diseases[i];
+	disflags = 0;
+	disflagsprog = 0;
+	for (auto dis : diseases) {
+		if (dis) {
+			if (dis->status == DiseaseStatus::kProgressing) {
+				disflags = disflags | ((uint64_t)1 << dis->disease);
+				disflagsprog = disflagsprog | ((uint64_t)1 << dis->disease);
+			} else if (dis->status == DiseaseStatus::kRegressing) {
+				disflags = disflags | ((uint64_t)1 << dis->disease);
+			}
+		}
 	}
-	diseases.clear();
+}
+
+void ActorInfo::ResetDiseases()
+{
+	for (int i = 0; i < Diseases::kMaxValue; i++) {
+		if (diseases[i]) {
+			LOG1_1("{}[ActorInfo] [Reset] {}", i);
+			diseases[i].reset();
+		}
+	}
 	disflags = 0;
 	disflagsprog = 0;
 }
+
+#pragma endregion

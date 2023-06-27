@@ -2,11 +2,17 @@
 #include "AlchemyEffect.h"
 #include "CustomItem.h"
 #include "Disease.h"
-#include "DiseaseStats.h"
 #include "ID.h"
 
 #include <memory>
 #include <mutex>
+
+namespace Events
+{
+	class EventHandler;
+}
+
+class Data;
 
 #define aclock ((void)0);  //std::lock_guard<std::mutex> guard(mutex);
 
@@ -61,6 +67,8 @@ private:
 	/// PlayerRef
 	/// </summary>
 	static inline RE::Actor* playerRef = RE::PlayerCharacter::GetSingleton();
+
+	static inline Data* data = nullptr;
 
 public:
 	/// <summary>
@@ -127,10 +135,6 @@ public:
 	/// custom items that may be distributed to an actor
 	/// </summary>
 	CustomItems citems;
-	/// <summary>
-	/// diesease stats
-	/// </summary>
-	DiseaseStats dinfo;
 
 private:
 	/// <summary>
@@ -333,12 +337,6 @@ public:
 	void Reset(RE::Actor* _actor);
 
 	/// <summary>
-	/// Returns whether the actor is infected
-	/// </summary>
-	/// <returns></returns>
-	bool IsInfected();
-
-	/// <summary>
 	/// Returns the underlying actor object
 	/// </summary>
 	/// <returns></returns>
@@ -439,7 +437,7 @@ public:
 	/// Whether the initial infections have been calculated for the actor
 	/// </summary>
 	/// <returns></returns>
-	bool ProcessedInitialInfections() { _processedInitialInfections; }
+	bool ProcessedInitialInfections() { return _processedInitialInfections; }
 	/// <summary>
 	/// Sets whether the initial infections have been processed
 	/// </summary>
@@ -940,4 +938,97 @@ public:
 	/// Returns whether the actor is bleeding out
 	/// </summary>
 	bool IsBleedingOut();
+
+	#pragma region Disease
+
+private:
+
+	float LastGameTime;
+	std::shared_ptr<DiseaseInfo> diseases[Diseases::kMaxValue];
+	float diseasepoints[Diseases::kMaxValue];
+	uint64_t disflags = 0;
+	uint64_t disflagsprog = 0;
+
+	int currentticks = 0;
+
+	friend class Events::EventHandler;
+
+	/// <summary>
+	/// Deletes a disease
+	/// </summary>
+	/// <param name="value"></param>
+	void DeleteDisease(Diseases::Disease value);
+
+public:
+
+	/// <summary>
+	/// finds a specific disease in the list of diseases of this actor
+	/// </summary>
+	/// <param name="value"></param>
+	/// <returns></returns>
+	std::shared_ptr<DiseaseInfo> FindDisease(Diseases::Disease value);
+
+	/// <summary>
+	/// progress a specific disease [value] by [points] advancement points
+	/// </summary>
+	/// <param name="value"></param>
+	/// <param name="actor"></param>
+	/// <param name="points"></param>
+	/// <returns>whether the actor should die</returns>
+	[[nodiscard]] bool ProgressDisease(Diseases::Disease value, float points);
+
+	/// <summary>
+	/// Forces an increase in stage of a disease
+	/// </summary>
+	/// <param name="data"></param>
+	/// <param name="actor"></param>
+	/// <param name="value"></param>
+	/// <returns>whether the actor should die</returns>
+	bool ForceIncreaseStage(Diseases::Disease value);
+
+	/// <summary>
+	/// Forces a decrease in stage of a disease
+	/// </summary>
+	/// <param name="data"></param>
+	/// <param name="actor"></param>
+	/// <param name="value"></param>
+	void ForceDecreaseStage(Diseases::Disease value);
+
+	/// <summary>
+	/// returns whether there is an active disease
+	/// </summary>
+	/// <returns></returns>
+	bool IsInfected();
+	bool IsInfected(Diseases::Disease dis);
+	bool IsInfectedProgressing();
+	bool IsInfectedProgressing(Diseases::Disease dis);
+
+	/// <summary>
+	/// cleans up unused DiseaseInfo objects
+	/// </summary>
+	void CleanDiseases();
+
+	/// <summary>
+	/// Calcs Flags for infections
+	/// </summary>
+	void CalcDiseaseFlags();
+
+	/// <summary>
+	/// Resets all diseaseinfo of the actor
+	/// </summary>
+	void ResetDiseases();
+
+	void AddDiseasePoints(Diseases::Disease disval, float points);
+
+	bool ProgressAllDiseases();
+
+	void SetDiseaseTicks(int ticks) { currentticks = ticks; }
+
+	int GetDiseaseTicks() { return currentticks; }
+
+	void SetDiseaseLastTime(float time) { LastGameTime = time; }
+
+	float GetDiseaseLastTime() { return LastGameTime; }
+
+	#pragma endregion
 };

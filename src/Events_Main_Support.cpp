@@ -85,8 +85,13 @@ namespace Events
 			auto [infections_possible_set, infections_forced_set] = data->GetPossibleInfections(acinfo, &tplt);
 			std::vector<Diseases::Disease> infections_possible;
 			std::vector<Diseases::Disease> infections_forced;
-			std::for_each(infections_possible_set.begin(), infections_possible_set.end(), [&infections_possible](Diseases::Disease dis) { infections_possible.push_back(dis); });
-			std::for_each(infections_possible_set.begin(), infections_forced_set.end(), [&infections_forced](Diseases::Disease dis) { infections_forced.push_back(dis); });
+			try {
+				std::for_each(infections_possible_set.begin(), infections_possible_set.end(), [&infections_possible](Diseases::Disease dis) { infections_possible.push_back(dis); });
+				std::for_each(infections_forced_set.begin(), infections_forced_set.end(), [&infections_forced](Diseases::Disease dis) { infections_forced.push_back(dis); });
+			}
+			catch (std::bad_alloc& e) {
+				return;
+			}
 
 			std::uniform_int_distribution<signed> rand5(1, 5);
 
@@ -96,7 +101,7 @@ namespace Events
 					std::uniform_int_distribution<signed> rand(0, infections_forced.size() - 1);
 					int count = rand5(Random::rand);
 					for (int i = 1; i <= count; i++)
-						acinfo->dinfo.ForceIncreaseStage(acinfo, infections_forced[rand(Random::rand)]);
+						acinfo->ForceIncreaseStage(infections_forced[rand(Random::rand)]);
 				} else if (infections_possible.size() > 0) {
 					for (int i = 0; i < infections_possible.size(); i++)
 					{
@@ -104,7 +109,7 @@ namespace Events
 						{
 							int count = rand5(Random::rand);
 							for (int i = 1; i <= count; i++)
-								acinfo->dinfo.ForceIncreaseStage(acinfo, infections_possible[i]);
+								acinfo->ForceIncreaseStage(infections_possible[i]);
 							return;
 						}
 					}
@@ -122,14 +127,14 @@ namespace Events
 				for (auto dis : infections_forced_set) {
 					int count = rand5(Random::rand);
 					for (int i = 1; i <= count; i++)
-						acinfo->dinfo.ForceIncreaseStage(acinfo, dis);
+						acinfo->ForceIncreaseStage(dis);
 				}
 				// process possible infections
 				for (auto dis : infections_possible_set) {
 					if (UtilityAlch::CalcChance(data->GetDisease(dis)->_baseInfectionChance)) {
 						int count = rand5(Random::rand);
 						for (int i = 1; i <= count; i++)
-							acinfo->dinfo.ForceIncreaseStage(acinfo, dis);
+							acinfo->ForceIncreaseStage(dis);
 					}
 				}
 			}
@@ -176,7 +181,10 @@ namespace Events
 		}
 		sem.release();
 
+		acinfo->ForceIncreaseStage(Diseases::kAshWoeBlight);
+
 		ProcessDistribution(acinfo);
+		ProcessInfections(acinfo);
 		EvalProcessing();
 		if (actor->IsDead())
 			return;

@@ -265,6 +265,37 @@ enum class DiseaseEffect
 	kNone = 0,
 };
 
+struct DiseaseFlags
+{
+	enum DiseaseFlag : EnumType
+	{
+		kNone = 0,
+		kAirSpread = 1 << 0,
+		kParticleSpread = 1 << 1,
+		kIntenseCold = 1 << 2,
+		kIntenseHeat = 1 << 3,
+		kInAshland = 1 << 4,
+		kInSwamp = 1 << 5,
+		kInDessert = 1 << 6,
+		kInAshstorm = 1 << 7,
+		kInSandstorm = 1 << 8,
+		kInBlizzard = 1 << 9,
+		kInRain = 1 << 10,
+		kIsWindy = 1 << 11,
+		kIsStormy = 1 << 12,
+		kIsCold = 1 << 13,
+		kIsHeat = 1 << 14,
+		kExtremeConditions = 1 << 15,
+		kActionPhysical = 1 << 16,
+		kActionMagical = 1 << 17,
+		kOnHitMelee = 1 << 18,
+		kOnHitRanged = 1 << 19,
+		kOnHitH2H = 1 << 20,
+		kGetHitMelee = 1 << 21,
+		kGetHitH2H = 1 << 22,
+	};
+};
+
 class DiseaseStage
 {
 public:
@@ -294,22 +325,27 @@ public:
 	std::string _specifier;
 
 	std::vector<std::pair<DiseaseEffect, Magnitude>> _effects;
-};
 
-struct DiseaseFlags
-{
-	enum DiseaseFlag : EnumType
-	{
-		kNone = 0,
-		kAirSpread = 1 << 0,
-		kParticleSpread = 1 << 1,
-	};
+	/// <summary>
+	/// flags reprensenting valid spread types for this disease stage
+	/// </summary>
+	EnumType flags = DiseaseFlags::kNone;
+
+	void CalcFlags();
 };
 
 class Disease
 {
 private:
+	/// <summary>
+	/// Flags containing all possible spreading types for this disease
+	/// </summary>
 	EnumType flags = DiseaseFlags::kNone;
+
+	/// <summary>
+	/// flags representing valid infection types for this disease
+	/// </summary>
+	EnumType spreadflags = DiseaseFlags::kNone;
 
 public:
 
@@ -335,7 +371,7 @@ public:
 	/// <summary>
 	/// pairs of chance / point values that determine how an infection is spread // these are the base chances for infection / progression
 	/// </summary>
-	std::pair<float /*chance*/, float /*points*/> _spreading[Spreading::kMaxValue];
+	//std::pair<float /*chance*/, float /*points*/> _spreading[Spreading::kMaxValue];
 	/// <summary>
 	/// type of the disease
 	/// </summary>

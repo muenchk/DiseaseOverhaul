@@ -388,7 +388,7 @@ TESDeathEventEnd:
 					// increase stage target
 					if (target) {
 						std::shared_ptr<ActorInfo> acinfo = Main::data->FindActor(target);
-						acinfo->dinfo.ForceIncreaseStage(acinfo, Diseases::kAshWoeBlight);
+						acinfo->ForceIncreaseStage(Diseases::kAshWoeBlight);
 						console->Print(std::string("AlchExt: Increased target stage").c_str());
 					} else
 						console->Print(std::string("AlchExt: Missing target").c_str());
@@ -397,7 +397,7 @@ TESDeathEventEnd:
 					// decrease stage target
 					if (target) {
 						std::shared_ptr<ActorInfo> acinfo = Main::data->FindActor(target);
-						acinfo->dinfo.ForceDecreaseStage(acinfo, Diseases::kAshWoeBlight);
+						acinfo->ForceDecreaseStage(Diseases::kAshWoeBlight);
 						console->Print(std::string("AlchExt: Decreased target stage").c_str());
 					} else
 						console->Print(std::string("AlchExt: Missing target").c_str());
@@ -411,15 +411,17 @@ TESDeathEventEnd:
 						console->Print((std::string("Automaton: \t\t") + std::to_string(acinfo->IsAutomaton())).c_str());
 						console->Print((std::string("Werewolf: \t\t") + std::to_string(acinfo->IsWerewolf())).c_str());
 						console->Print((std::string("Printing disease information: \t")).c_str());
-						for (int i = 0; i < acinfo->dinfo.diseases.size(); i++) {
-							console->Print((std::string("\tDisease:\t\t\t") + Main::data->GetDisease(acinfo->dinfo.diseases[i]->disease)->GetName()).c_str());
-							console->Print((std::string("\t\tstatus:\t\t") + UtilityAlch::ToString(acinfo->dinfo.diseases[i]->status)).c_str());
-							console->Print((std::string("\t\tstage:\t\t") + std::to_string(acinfo->dinfo.diseases[i]->stage)).c_str());
-							console->Print((std::string("\t\tadvPoints:\t") + std::to_string(acinfo->dinfo.diseases[i]->advPoints)).c_str());
-							console->Print((std::string("\t\tearladv:\t\t") + std::to_string(acinfo->dinfo.diseases[i]->earliestAdvancement)).c_str());
-							console->Print((std::string("\t\timmuneuntil:\t") + std::to_string(acinfo->dinfo.diseases[i]->immuneUntil)).c_str());
-							console->Print((std::string("\t\tpermanentMods:\t") + std::to_string(acinfo->dinfo.diseases[i]->permanentModifiers)).c_str());
-							console->Print((std::string("\t\tpermanentPoints:\t") + std::to_string(acinfo->dinfo.diseases[i]->permanentModifiersPoints)).c_str());
+						for (auto dis : acinfo->diseases) {
+							if (dis != nullptr) {
+								console->Print((std::string("\tDisease:\t\t\t") + Main::data->GetDisease(dis->disease)->GetName()).c_str());
+								console->Print((std::string("\t\tstatus:\t\t") + UtilityAlch::ToString(dis->status)).c_str());
+								console->Print((std::string("\t\tstage:\t\t") + std::to_string(dis->stage)).c_str());
+								console->Print((std::string("\t\tadvPoints:\t") + std::to_string(dis->advPoints)).c_str());
+								console->Print((std::string("\t\tearladv:\t\t") + std::to_string(dis->earliestAdvancement)).c_str());
+								console->Print((std::string("\t\timmuneuntil:\t") + std::to_string(dis->immuneUntil)).c_str());
+								console->Print((std::string("\t\tpermanentMods:\t") + std::to_string(dis->permanentModifiers)).c_str());
+								console->Print((std::string("\t\tpermanentPoints:\t") + std::to_string(dis->permanentModifiersPoints)).c_str());
+							}
 						}
 					} else
 						console->Print(std::string("AlchExt: Missing target").c_str());
@@ -427,7 +429,7 @@ TESDeathEventEnd:
 					LOG_3("{}[Events] [InputEvent] registered inc adv points event");
 					if (target) {
 						std::shared_ptr<ActorInfo> acinfo = Main::data->FindActor(target);
-						bool kill = acinfo->dinfo.ProgressDisease(acinfo, Diseases::kAshWoeBlight, 500);
+						bool kill = acinfo->ProgressDisease(Diseases::kAshWoeBlight, 500);
 						console->Print(std::string("AlchExt: Decreased target stage").c_str());
 					} else
 						console->Print(std::string("AlchExt: Missing target").c_str());

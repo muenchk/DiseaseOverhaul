@@ -9,12 +9,18 @@
 void ActorInfo::Init()
 {
 	playerRef = RE::PlayerCharacter::GetSingleton();
+	data = Data::GetSingleton();
 }
 
 ActorInfo::ActorInfo(RE::Actor* _actor)
 {
 	LOG_3("{}[ActorInfo] [ActorInfo]");
 	actor = _actor->GetHandle();
+	for (int i = 0; i < Diseases::kMaxValue; i++) {
+		diseases[i].reset();
+		diseasepoints[i] = 0;
+	}
+	CalcDiseaseFlags();
 	if (_actor) {
 		formid.SetID(_actor->GetFormID());
 		// get original id
@@ -60,7 +66,6 @@ void ActorInfo::Reset(RE::Actor* _actor)
 	aclock;
 	actor = _actor->GetHandle();
 	citems.Reset();
-	dinfo.Reset();
 	formid = ID();
 	pluginname = "";
 	pluginID = 1;
@@ -73,6 +78,11 @@ void ActorInfo::Reset(RE::Actor* _actor)
 	whitelistedcalculated = false;
 	target = std::weak_ptr<ActorInfo>{};
 	handleactor = false;
+	for (int i = 0; i < Diseases::kMaxValue; i++) {
+		diseases[i].reset();
+		diseasepoints[i] = 0;
+	}
+	CalcDiseaseFlags();
 	if (_actor) {
 		formid.SetID(_actor->GetFormID());
 		// get original id
@@ -193,11 +203,6 @@ bool ActorInfo::GetDead()
 {
 	aclock;
 	return dead;
-}
-
-bool ActorInfo::IsInfected()
-{
-	return dinfo.IsInfected();
 }
 
 RE::Actor* ActorInfo::GetActor()
@@ -754,6 +759,7 @@ bool ActorInfo::CalcDistrConditionsIntern(CustomItem* item)
 	}
 	return false;
 }
+
 
 bool ActorInfo::IsInCombat()
 {

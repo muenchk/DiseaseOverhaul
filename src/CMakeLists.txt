@@ -5,6 +5,7 @@ include_directories("${ROOT_DIR}/include")
 set(SOURCE_DIR "${ROOT_DIR}/src")
 set(SOURCE_FILES
 	"${SOURCE_DIR}/ActorInfo.cpp"
+	"${SOURCE_DIR}/ActorInfo_Diseases.cpp"
 	"${SOURCE_DIR}/ActorManipulation.cpp"
 	"${SOURCE_DIR}/AlchemyEffect.cpp"
 	"${SOURCE_DIR}/BufferOperations.cpp"
@@ -73,6 +74,8 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 			"/sdl"	# Enable Additional Security Checks
 			"/utf-8"	# Set Source and Executable character sets to UTF-8
 			"/Zi"	# Debug Information Format
+				
+			"/openmp:llvm" # Enable openmp support
 
 			"/permissive-"	# Standards conformance
 			"/Zc:preprocessor"	# Enable preprocessor conformance mode

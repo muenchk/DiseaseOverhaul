@@ -1394,4 +1394,38 @@ void Data::PatchGameObjects()
 			}
 		}
 	}
+
+	// Patch all magic effects used by my diseases to show up under active magic effects if wanted
+	if (Settings::System::_showDiseaseEffects)
+	{
+		for (int i = 0; i < Diseases::kMaxValue; i++)
+		{
+			if (diseases[i])
+			{
+				if (diseases[i]->endeffect)
+				{
+					for (int c = 0; c < diseases[i]->endeffect->effects.size(); c++)
+					{
+						if (auto eff = diseases[i]->endeffect->effects[c]->baseEffect; eff)
+							eff->data.flags = eff->data.flags.reset(RE::EffectSetting::EffectSettingData::Flag::kHideInUI);
+					}
+				}
+				if (diseases[i]->_stageInfection && diseases[i]->_stageInfection->effect) {
+					for (int c = 0; c < diseases[i]->_stageInfection->effect->effects.size(); c++) {
+						if (auto eff = diseases[i]->_stageInfection->effect->effects[c]->baseEffect; eff)
+							eff->data.flags = eff->data.flags.reset(RE::EffectSetting::EffectSettingData::Flag::kHideInUI);
+					}
+				}
+				for (int x = 0; x <= diseases[i]->_numstages; x++)
+				{
+					if (diseases[i]->_stages[x] && diseases[i]->_stages[x]->effect) {
+						for (int c = 0; c < diseases[i]->_stages[x]->effect->effects.size(); c++) {
+							if (auto eff = diseases[i]->_stages[x]->effect->effects[c]->baseEffect; eff)
+								eff->data.flags = eff->data.flags.reset(RE::EffectSetting::EffectSettingData::Flag::kHideInUI);
+						}
+					}
+				}
+			}
+		}
+	}
 }

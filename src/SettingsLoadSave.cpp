@@ -317,7 +317,8 @@ void Settings::Save()
 	ini.SetLongValue("General", "CycleWaitTime", Settings::System::_cycletime,	"// Time between two periods in milliseconds.\n"
 																				"// Set to smaller values to increase reactivity. Set to larger \n"
 																				"// values to decrease performance impact.");
-	ini.SetDoubleValue("General", "TickLength", Settings::System::_ticklength,	"// Time beween two calculation ticks in game days passed.");
+	ini.SetDoubleValue("General", "TickLength", Settings::System::_ticklength, "// Time beween two calculation ticks in game days passed.");
+	ini.SetDoubleValue("General", "ShowDiseaseEffects", Settings::System::_showDiseaseEffects, "// Shows the effects of diseases in the Ative Magic Effect Menu.");
 
 	// debugging
 	ini.SetBoolValue("Debug", "EnableLogging", Debug::EnableLog, "// Enables logging output. Use with care as logs may get very large.");

@@ -585,6 +585,11 @@ public:
 		/// [Settings] tick length in game time
 		/// </summary>
 		static inline float _ticklength = 0.0001f;  //0.005f;
+
+		/// <summary>
+		/// [Settings] Whether to display currently active disease effects under Active Magic Effects
+		/// </summary>
+		static inline bool _showDiseaseEffects = true;
 	};
 
 	struct Debug

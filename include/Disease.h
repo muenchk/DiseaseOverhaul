@@ -61,7 +61,10 @@ struct Diseases
 		kLeprosy = 41,
 		kPlague = 42,
 
-		kMaxValue = 43,
+		// special
+		kSanguinareVampirism = 43,
+
+		kMaxValue = 44,
 	};
 };
 

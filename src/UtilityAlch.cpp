@@ -93,6 +93,8 @@ std::string UtilityAlch::ToString(Diseases::Disease value)
 		return "Yellow Fever";
 	case Diseases::kYellowTick:
 		return "Yellow Tick";
+	case Diseases::kSanguinareVampirism:
+		return "Sanguinare Vampirism";
 	default:
 		return "Unknown";
 	}

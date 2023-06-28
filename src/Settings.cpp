@@ -2715,7 +2715,7 @@ void Settings::LoadDistrConfig()
 
 	// find all stage defining files
 
-	std::vector<std::string> rawfilesstages = { R"(Data\SKSE\Plugins\DiseaseOverhaul_Blight_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Common_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Dangerous_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Extreme_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Fever_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Mild_Stages.csv)" };
+	std::vector<std::string> rawfilesstages = { R"(Data\SKSE\Plugins\DiseaseOverhaul_Blight_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Common_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Dangerous_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Extreme_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Fever_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Mild_Stages.csv)", R"(Data\SKSE\Plugins\DiseaseOverhaul_Special_Stages.csv)" };
 
 	std::vector<std::string> filesstages;
 

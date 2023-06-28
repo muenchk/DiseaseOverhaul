@@ -1359,3 +1359,39 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 
 	return std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>>{ infec, infecforce };
 }
+
+void Data::PatchGameObjects()
+{
+	// Patch Sanguinare Vampirism to use the new magic effect instead of the old one
+	{
+		RE::EffectSetting* effect = Utility::GetTESForm<RE::EffectSetting>(datahandler, 0x0E34, Settings::PluginName);
+		if (effect)
+		{
+			RE::SpellItem* sanvam = RE::TESForm::LookupByID<RE::SpellItem>(0xB8780);
+			if (sanvam)
+			{
+				if (sanvam->effects.size() > 0)
+				{
+					if (sanvam->effects.size() > 1)
+					{
+						for (int i = 0; i < sanvam->effects.size(); i++) {
+							auto eff = sanvam->effects.back();
+							sanvam->effects.pop_back();
+							RE::free(eff);
+						}
+					}
+					sanvam->effects[0]->baseEffect = effect;
+				}
+				else
+				{
+					RE::Effect* eff = RE::malloc<RE::Effect>();
+					eff->baseEffect = effect;
+					eff->effectItem.area = 0;
+					eff->effectItem.magnitude = 25;
+					eff->effectItem.duration = 0;
+					eff->conditions.head = nullptr;
+				}
+			}
+		}
+	}
+}

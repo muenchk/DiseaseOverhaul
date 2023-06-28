@@ -4,8 +4,10 @@
 #include "Distribution.h"
 #include "BufferOperations.h"
 #include "ActorManipulation.h"
+#include "Papyrus.h"
 #include "Random.h"
 #include "Stats.h"
+#include "VM.h"
 
 #pragma region Disease
 
@@ -21,6 +23,7 @@ void ActorInfo::AddDiseasePoints(Diseases::Disease disval, float points)
 {
 #pragma omp atomic update
 	diseasepoints[disval] += points;
+	loginfo("[ActorInfo] [AddDiseasePoints] Actor: {}, Disease: {}, Points: {}", _formstring, UtilityAlch::ToString(disval), points);
 }
 
 bool ActorInfo::ProgressAllDiseases()
@@ -41,6 +44,11 @@ std::shared_ptr<DiseaseInfo> ActorInfo::FindDisease(Diseases::Disease value)
 bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 {
 	if (!valid || dead)
+		return false;
+
+	// sanguinare vampirism is only applicable to the player
+	// also return if the actor already is a vampire
+	if (value == Diseases::Disease::kSanguinareVampirism && (!IsPlayer() || _vampire))
 		return false;
 
 	LOG3_3("{}[ActorInfo] [ProgressDisease] actor: {},disease: {}, points: {}", _formstring, UtilityAlch::ToString(value), points);
@@ -254,6 +262,50 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 		break;
 	}
 
+	// handle vampirism
+	if (value == Diseases::Disease::kSanguinareVampirism)
+	{
+		if (dinfo->stage == dis->_numstages)
+		{
+			// if we have reached the maximum stage turn the actor into a vampire
+
+			//If Game.GetPlayer().GetCombatState() == 0 && Game.IsMovementControlsEnabled() && Game.IsFightingControlsEnabled() VampireSleepMessage.Show();
+			//Debug.Trace(self + "Player not in combat, and controls are enabled. Trigger Vampire change")
+			//	PlayerVampireQuest.VampireChange(Game.GetPlayer())
+			//		Else
+
+			LOG1_4("{}[ActorInfo] [ProgressDisease] Preparing for vampire transformation for actor {}", _formstring);
+			if (IsInCombat() == false)
+			{
+				RE::TESQuest* qs = RE::TESForm::LookupByID<RE::TESQuest>(0xEAFD5);
+				if (qs) {
+					LOG_4("{}[ActorInfo] [ProgressDisease] Firing vampire transformation");
+					auto scriptobj = ScriptObject::FromForm(qs, "PlayerVampireQuestScript");
+					auto args = RE::MakeFunctionArguments(GetActor());
+					ScriptCallbackPtr nullCallback;
+					Papyrus::VM->DispatchMethodCall(scriptobj, "VampireChange"sv, args, nullCallback);
+					DeleteDisease(Diseases::Disease::kSanguinareVampirism);
+
+					// get vampire message
+					RE::BGSMessage* vampsleepmes = RE::TESForm::LookupByID<RE::BGSMessage>(0x0ED0AB);
+					if (vampsleepmes) {
+						auto vsmscr = ScriptObject::FromForm(vampsleepmes, "Message");
+						auto argus = RE::MakeFunctionArguments(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+
+						bool result = Papyrus::VM->DispatchMethodCall(vsmscr, "Show"sv, argus, nullCallback);
+						LOG1_4("{}[ActorInfo] [ProgressDisease] Dispatched Message call: {}", result);
+					}
+
+					// dispel sanguinare vampirism script effect
+					DispelEffect(RE::TESForm::LookupByID<RE::SpellItem>(0xB8780));
+
+					// update npc vampire status
+					_vampire = true;
+				}
+			}
+		}
+	}
+
 	CalcDiseaseFlags();
 	LOG_4("{}[ActorInfo] [ProgressDisease] end");
 	return killac;
@@ -264,6 +316,10 @@ bool ActorInfo::ForceIncreaseStage(Diseases::Disease value)
 	LOG_2("{}[ActorInfo] [ForceIncreaseStage]");
 
 	bool killac = false;
+
+	// if actor is already a vampire, return
+	if (value == Diseases::Disease::kSanguinareVampirism && _vampire)
+		return false;
 
 	std::shared_ptr<DiseaseInfo> dinfo = FindDisease(value);
 	if (!dinfo) {

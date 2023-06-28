@@ -24,14 +24,17 @@ set(SOURCE_FILES
 	"${SOURCE_DIR}/ID.cpp"
 	"${SOURCE_DIR}/main.cpp"
 	"${SOURCE_DIR}/PCH.h"
+	"${SOURCE_DIR}/Papyrus.cpp"
 	"${SOURCE_DIR}/Random.cpp"
 	"${SOURCE_DIR}/Season.cpp"
 	"${SOURCE_DIR}/Settings.cpp"
 	"${SOURCE_DIR}/SettingsLoadSave.cpp"
 	"${SOURCE_DIR}/Utility.cpp"
 	"${SOURCE_DIR}/UtilityAlch.cpp"
+	"${SOURCE_DIR}/VM.cpp"
 	"${SOURCE_DIR}/WeatherInfo.cpp"
 	"${SOURCE_DIR}/WorldspaceController.cpp"
+	"${SOURCE_DIR}/Papyrus/PapyrusVampirism.cpp"
 )
 
 source_group(TREE "${ROOT_DIR}" FILES ${SOURCE_FILES})

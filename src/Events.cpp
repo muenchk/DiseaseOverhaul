@@ -12,12 +12,17 @@
 #include <filesystem>
 #include <deque>
 
+#include <Windows.h>
+#include <realtimeapiset.h>
+
 #include "ActorInfo.h"
 #include "Game.h"
 #include "UtilityAlch.h"
 #include "Events.h"
 #include "Settings.h"
 #include "Data.h"
+#include "Papyrus.h"
+#include "Papyrus/PapyrusVampirism.h"
 #include "Random.h"
 #include "Stats.h"
 #include "WorldspaceController.h"
@@ -66,7 +71,11 @@ namespace Events
 		kH2H,
 		kRanged
 	};
+						
+#define TimeMultSeconds 10000000
+#define TimeMultMillis 10000
 
+#define Time100Millis 1000000
 
 	/// <summary>
 	/// Processes TESHitEvents
@@ -82,11 +91,18 @@ namespace Events
 		if (a_event->flags & RE::TESHitEvent::Flag::kHitBlocked)
 			return EventResult::kContinue;
 
+		unsigned long long currtime = 0;
+		QueryUnbiasedInterruptTime(&currtime);
+
 		// currently unused
 		if (a_event->target.get() != nullptr && a_event->cause.get() != nullptr) {
 			if (RE::Actor* target = a_event->target->As<RE::Actor>(); target != nullptr) {
 				if (RE::Actor* aggressor = a_event->cause->As<RE::Actor>(); aggressor != nullptr) {
 					auto actar = Main::data->FindActor(target);
+					// if less than interval has passed since the last hitevent on the actor return
+					if (currtime - actar->GetHitCooldown() < Time100Millis)
+						return EventResult::kContinue;
+					actar->SetHitCooldown(currtime);
 					auto acagg = Main::data->FindActor(aggressor);
 
 					// skip if both actors aren't infected
@@ -619,9 +635,12 @@ TESDeathEventEnd:
 					Stats::MainHandler_TimeTaken = 0;
 					Stats::MainHandler_Particles_Times.clear();
 				} else if (key == 0x47) {  // numpad 7
-					LOG_3("{}[Events] [InputEvent] registered switch particle handler event");
-					console->Print(std::string("Switched particle handler, deprecated").c_str());
-					Main::particlehandling = !Main::particlehandling;
+					LOG_3("{}[Events] [InputEvent] registered infect wth sanguinare vampirism event");
+					if (target) {
+						Papyrus::Vampirism::InfectSanguinareVampirism(nullptr, 0, nullptr, target);
+					} else {
+						console->Print(std::string("AlchExt: Missing target").c_str());
+					}
 				} else if (key == 0x48) {  // numpad 8
 				} else if (key == 0x49) {  // numpad 9
 				}

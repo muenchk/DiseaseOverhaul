@@ -289,4 +289,9 @@ public:
 
 	void InitDiseases();
 
+	/// <summary>
+	/// Patches game objects to this mods needs
+	/// </summary>
+	void PatchGameObjects();
+
 }; 

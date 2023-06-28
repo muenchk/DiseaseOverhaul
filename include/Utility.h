@@ -309,6 +309,37 @@ public:
 	static RE::TESForm* GetTESForm(RE::TESDataHandler* datahandler, RE::FormID formid, std::string pluginname, std::string editorid = "");
 
 	/// <summary>
+	/// returns a game object from various inputs
+	/// </summary>
+	/// <param name="datahandler">datahandler to get data from</param>
+	/// <param name="formid">id or partial id of item (may be 0, if editorid is set)</param>
+	/// <param name="pluginname">name of the plugin the item is included (may be the empty string, if item is in the basegame, or editorid is given)</param>
+	/// <param name="editorid">editorid of the item, defaults to empty string</param>
+	/// <returns></returns>
+	template <class T>
+	static T* GetTESForm(RE::TESDataHandler* datahandler, RE::FormID formid, std::string pluginname, std::string editorid = "")
+	{
+		T* tmp = nullptr;
+		if (pluginname.size() != 0) {
+			if (formid != 0) {
+				tmp = datahandler->LookupForm<T>(formid, std::string_view{ pluginname });
+				if (tmp == nullptr && editorid.size() > 0) {
+					tmp = RE::TESForm::LookupByEditorID<T>(std::string_view{ editorid });
+				}
+			} else if (editorid.size() > 0) {
+				tmp = RE::TESForm::LookupByEditorID<T>(std::string_view{ editorid });
+			}
+			// else we cannot find what we were lookin for
+		} else if (formid > 0) {
+			// pluginname is not given, so try to find the form by the id itself
+			tmp = RE::TESForm::LookupByID<T>(formid);
+		} else if (editorid.size() > 0) {
+			tmp = RE::TESForm::LookupByEditorID<T>(std::string_view{ editorid });
+		}
+		return tmp;
+	}
+
+	/// <summary>
 	/// Parses objects for distribution rules from a string input
 	/// </summary>
 	/// <param name="input">the string to parse</param>

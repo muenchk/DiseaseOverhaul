@@ -5,6 +5,7 @@
 #include "DataStorage.h"
 #include "Data.h"
 #include "Hooks.h"
+#include "Papyrus.h"
 #include "WorldspaceController.h"
 
 namespace
@@ -198,6 +199,8 @@ extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_s
 	Game::SaveLoad::GetSingleton()->Register(serialization, 0xFD34899E);
 
 	Hooks::InstallHooks();
+
+	SKSE::GetPapyrusInterface()->Register(Papyrus::Register);
 
 	return true;
 }

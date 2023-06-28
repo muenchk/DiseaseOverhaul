@@ -59,6 +59,13 @@ namespace Events
 	}                    
 
 
+	enum class HitType
+	{
+		kNone,
+		kMelee,
+		kH2H,
+		kRanged
+	};
 
 
 	/// <summary>
@@ -67,11 +74,171 @@ namespace Events
 	/// <param name=""></param>
 	/// <param name=""></param>
 	/// <returns></returns>
-	EventResult EventHandler::ProcessEvent(const RE::TESHitEvent* /*a_event*/, RE::BSTEventSource<RE::TESHitEvent>*)
+	EventResult EventHandler::ProcessEvent(const RE::TESHitEvent* a_event, RE::BSTEventSource<RE::TESHitEvent>*)
 	{
 		EvalProcessingEvent();
 		LOG_1("{}[Events] [TESHitEvent]");
+		// if hit is blocked, skip
+		if (a_event->flags & RE::TESHitEvent::Flag::kHitBlocked)
+			return EventResult::kContinue;
+
 		// currently unused
+		if (a_event->target.get() != nullptr && a_event->cause.get() != nullptr) {
+			if (RE::Actor* target = a_event->target->As<RE::Actor>(); target != nullptr) {
+				if (RE::Actor* aggressor = a_event->cause->As<RE::Actor>(); aggressor != nullptr) {
+					auto actar = Main::data->FindActor(target);
+					auto acagg = Main::data->FindActor(aggressor);
+
+					// skip if both actors aren't infected
+					if (!actar->IsInfected() && !acagg->IsInfected())
+						return EventResult::kContinue;
+
+					HitType hit = HitType::kNone;
+
+					if (a_event->flags & RE::TESHitEvent::Flag::kBashAttack) {
+						// assume Melee
+						hit = HitType::kMelee;
+						LOG_4("{}[Events] [TESHitEvent] base attack");
+					} else if (a_event->source == 0 && a_event->projectile == 0) {
+						// assume H2H
+						hit = HitType::kH2H;
+						LOG_4("{}[Events] [TESHitEvent] source and projectile null");
+					} else {
+						RE::TESForm* source = RE::TESForm::LookupByID(a_event->source);
+						RE::TESForm* projectile = RE::TESForm::LookupByID(a_event->projectile);
+
+						switch (source->GetFormType()) {
+						case RE::FormType::Weapon:
+							if (RE::TESObjectWEAP* weap = source->As<RE::TESObjectWEAP>()) {
+								if (weap->IsBow() || weap->IsCrossbow()) {
+									hit = HitType::kRanged;
+									LOG_4("{}[Events] [TESHitEvent] ranged weapon");
+								} else if (weap->IsMelee()) {
+									hit = HitType::kMelee;
+									LOG_4("{}[Events] [TESHitEvent] melee weapon");
+								} else if (weap->IsHandToHandMelee()) {
+									hit = HitType::kH2H;
+									LOG_4("{}[Events] [TESHitEvent] h2h");
+								} else {
+									hit = HitType::kMelee;
+									LOG_4("{}[Events] [TESHitEvent] other weapon");
+								}
+							}
+							// don't know about anything rn
+						}
+					}
+
+					switch (hit) {
+					case HitType::kNone:
+						// no valid hit registered
+						break;
+					case HitType::kMelee:
+						if (acagg->IsInfectedProgressing()) {
+							for (int i = 0; i < Diseases::kMaxValue; i++) {
+								auto disval = static_cast<Diseases::Disease>(i);
+								if (acagg->IsInfectedProgressing(disval)) {
+									auto dinfo = acagg->FindDisease(disval);
+									if (dinfo) {
+										auto dis = Main::data->GetDisease(disval);
+										if (dis) {
+											auto stage = dis->_stages[dinfo->stage];
+											if (stage) {
+												if (UtilityAlch::CalcChance(stage->_spreading[Spreading::kOnHitMelee].first))
+													actar->AddDiseasePoints(disval, stage->_spreading[Spreading::kOnHitMelee].second);
+											}
+										}
+									}
+								}
+							}
+						}
+						if (actar->IsInfected()) {
+							for (int i = 0; i < Diseases::kMaxValue; i++) {
+								auto disval = static_cast<Diseases::Disease>(i);
+								if (acagg->IsInfected(disval)) {
+									auto dinfo = acagg->FindDisease(disval);
+									if (dinfo) {
+										auto dis = Main::data->GetDisease(disval);
+										if (dis) {
+											auto stage = dis->_stages[dinfo->stage];
+											if (stage) {
+												if (UtilityAlch::CalcChance(stage->_spreading[Spreading::kGetHitMelee].first))
+													acagg->AddDiseasePoints(disval, stage->_spreading[Spreading::kGetHitMelee].second);
+											}
+										}
+									}
+								}
+							}
+						}
+						break;
+					case HitType::kH2H:
+						if (acagg->IsInfectedProgressing()) {
+							for (int i = 0; i < Diseases::kMaxValue; i++) {
+								auto disval = static_cast<Diseases::Disease>(i);
+								if (acagg->IsInfectedProgressing(disval)) {
+									auto dinfo = acagg->FindDisease(disval);
+									if (dinfo) {
+										auto dis = Main::data->GetDisease(disval);
+										if (dis) {
+											auto stage = dis->_stages[dinfo->stage];
+											if (stage) {
+												if (UtilityAlch::CalcChance(stage->_spreading[Spreading::kOnHitH2H].first))
+													actar->AddDiseasePoints(disval, stage->_spreading[Spreading::kOnHitH2H].second);
+											}
+										}
+									}
+								}
+							}
+						}
+						if (actar->IsInfected()) {
+							for (int i = 0; i < Diseases::kMaxValue; i++) {
+								auto disval = static_cast<Diseases::Disease>(i);
+								if (acagg->IsInfected(disval)) {
+									auto dinfo = acagg->FindDisease(disval);
+									if (dinfo) {
+										auto dis = Main::data->GetDisease(disval);
+										if (dis) {
+											auto stage = dis->_stages[dinfo->stage];
+											if (stage) {
+												if (UtilityAlch::CalcChance(stage->_spreading[Spreading::kGetHitH2H].first))
+													acagg->AddDiseasePoints(disval, stage->_spreading[Spreading::kGetHitH2H].second);
+											}
+										}
+									}
+								}
+							}
+						}
+
+						break;
+					case HitType::kRanged:
+						if (acagg->IsInfectedProgressing()) {
+							for (int i = 0; i < Diseases::kMaxValue; i++) {
+								auto disval = static_cast<Diseases::Disease>(i);
+								if (acagg->IsInfectedProgressing(disval)) {
+									auto dinfo = acagg->FindDisease(disval);
+									if (dinfo) {
+										auto dis = Main::data->GetDisease(disval);
+										if (dis) {
+											auto stage = dis->_stages[dinfo->stage];
+											if (stage) {
+												if (UtilityAlch::CalcChance(stage->_spreading[Spreading::kOnHitRanged].first))
+													actar->AddDiseasePoints(disval, stage->_spreading[Spreading::kOnHitRanged].second);
+											}
+										}
+									}
+								}
+							}
+						}
+						break;
+					}
+
+					if (hit != HitType::kNone) {
+						acagg->ProgressAllDiseases();
+						actar->ProgressAllDiseases();
+					}
+				}
+			}
+		}
+
 		return EventResult::kContinue;
 	}
 

@@ -100,16 +100,21 @@ namespace Events
 				if (infections_forced.size() > 0) {
 					std::uniform_int_distribution<signed> rand(0, infections_forced.size() - 1);
 					int count = rand5(Random::rand);
-					for (int i = 1; i <= count; i++)
-						acinfo->ForceIncreaseStage(infections_forced[rand(Random::rand)]);
+					for (int i = 1; i <= count; i++) {
+						auto dis = infections_forced[rand(Random::rand)];
+						acinfo->ForceIncreaseStage(dis);
+						acinfo->ProgressDisease(dis, Random::rand1000(Random::rand));
+					}
 				} else if (infections_possible.size() > 0) {
 					for (int i = 0; i < infections_possible.size(); i++)
 					{
 						if (UtilityAlch::CalcChance(data->GetDisease(infections_possible[i])->_baseInfectionChance))
 						{
 							int count = rand5(Random::rand);
-							for (int i = 1; i <= count; i++)
+							for (int i = 1; i <= count; i++) {
 								acinfo->ForceIncreaseStage(infections_possible[i]);
+								acinfo->ProgressDisease(infections_possible[i], Random::rand1000(Random::rand));
+							}
 							return;
 						}
 					}

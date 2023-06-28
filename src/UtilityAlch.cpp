@@ -110,6 +110,8 @@ std::string UtilityAlch::ToString(std::shared_ptr<DiseaseStage>& stage)
 
 bool UtilityAlch::CalcChance(float chance)
 {
+	if (chance == 0)
+		return false;
 	return Random::rand1000(Random::rand) < (chance * 10);
 }
 

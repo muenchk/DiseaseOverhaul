@@ -214,6 +214,8 @@ private:
 
 	bool _haslefthand = false;
 
+	unsigned long long hitcooldown = 0;
+
 	/// <summary>
 	/// string that represents this object (for fast usage)
 	/// </summary>
@@ -443,6 +445,9 @@ public:
 	/// </summary>
 	/// <param name="processed"></param>
 	void ProcessedInitialInfections(bool processed) { _processedInitialInfections = processed; }
+
+	unsigned long long GetHitCooldown() { return hitcooldown; }
+	void SetHitCooldown(unsigned long long value) { hitcooldown = value; }
 
 	/// <summary>
 	/// Whether the NPC is currently in combat

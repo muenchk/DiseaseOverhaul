@@ -248,8 +248,14 @@ namespace Events
 					}
 
 					if (hit != HitType::kNone) {
-						acagg->ProgressAllDiseases();
-						actar->ProgressAllDiseases();
+						if (acagg->ProgressAllDiseases() && Settings::Disease::_AllowActorDeath) {
+							logusage("[Events] [HandleActors] Actor {} has died from their disease", Utility::PrintFormNonDebug(acagg));
+							acagg->Kill();
+						}
+						if (actar->ProgressAllDiseases() && Settings::Disease::_AllowActorDeath) {
+							logusage("[Events] [HandleActors] Actor {} has died from their disease", Utility::PrintFormNonDebug(actar));
+							actar->Kill();
+						}
 					}
 				}
 			}
@@ -571,7 +577,11 @@ TESDeathEventEnd:
 					// increase stage target
 					if (target) {
 						std::shared_ptr<ActorInfo> acinfo = Main::data->FindActor(target);
-						acinfo->ForceIncreaseStage(Diseases::kAshWoeBlight);
+						if (acinfo->ForceIncreaseStage(Diseases::kAshWoeBlight) && Settings::Disease::_AllowActorDeath)
+						{
+							logusage("[Events] [HandleActors] Actor {} has died from their disease", Utility::PrintFormNonDebug(acinfo));
+							acinfo->Kill();
+						}
 						console->Print(std::string("AlchExt: Increased target stage").c_str());
 					} else
 						console->Print(std::string("AlchExt: Missing target").c_str());
@@ -642,6 +652,24 @@ TESDeathEventEnd:
 						console->Print(std::string("AlchExt: Missing target").c_str());
 					}
 				} else if (key == 0x48) {  // numpad 8
+					LOG_3("{}[Events] [InputEvent] registered print possible diseases event");
+					if (target) {
+						std::shared_ptr<ActorInfo> acinfo = Main::data->FindActor(target);
+						console->Print((std::string("DO: Printing Infection information: \t") + Utility::PrintFormNonDebug(acinfo->GetActor())).c_str());
+						auto [possible, forced] = Main::data->GetPossibleInfections(acinfo, nullptr);
+						console->Print((std::string("Printing possible infections: \t")).c_str());
+						for (auto& [key, value] : possible)
+						{
+							if (Main::data->GetDisease(key))
+								console->Print((std::string("\tDisease:\t\t\t") + Main::data->GetDisease(key)->GetName()).c_str());
+						}
+						console->Print((std::string("Printing force infections: \t")).c_str());
+						for (auto& dis : forced)
+						{
+							if (Main::data->GetDisease(dis))
+								console->Print((std::string("\tDisease:\t\t\t") + Main::data->GetDisease(dis)->GetName()).c_str());
+						}
+					}
 				} else if (key == 0x49) {  // numpad 9
 				}
 			}

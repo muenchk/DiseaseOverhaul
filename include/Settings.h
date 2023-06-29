@@ -584,7 +584,7 @@ public:
 		/// <summary>
 		/// [Settings] tick length in game time
 		/// </summary>
-		static inline float _ticklength = 0.0001f;  //0.005f;
+		static inline float _ticklength = 0.005f;
 
 		/// <summary>
 		/// [Settings] Whether to display currently active disease effects under Active Magic Effects
@@ -651,6 +651,8 @@ public:
 		static inline bool _ignoreDiseaseResistance = false;     // ignores all disease resistance and immunities
 		static inline float _particleRange = 500.0f;             //150.0f;
 		static inline bool _ignoreTimeAdvancementConstraint = false;  // ignores the time constraint on advancing stages
+
+		static inline bool _AllowActorDeath = false;
 	};
 
 	struct Infection
@@ -940,7 +942,7 @@ public:
 	static std::vector<RE::AlchemyItem*> GetMatchingItems(std::list<std::pair<AlchemicEffect, RE::AlchemyItem*>>& list, AlchemicEffect effect)
 	{
 		std::vector<RE::AlchemyItem*> ret;
-		for (auto entry : list) {
+		for (auto& entry : list) {
 			if ((std::get<0>(entry) & effect) > 0)
 				ret.push_back(std::get<1>(entry));
 		}

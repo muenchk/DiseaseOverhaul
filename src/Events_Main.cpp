@@ -98,7 +98,7 @@ namespace Events
 				}*/
 
 				LOG1_1("{}[Events] [HandleActors] registered actors {}", acset.size());
-				for (auto weak : acset)
+				for (auto& weak : acset)
 				{
 					if (auto acinfo = weak.lock())
 						actors.push_back(acinfo);
@@ -289,7 +289,7 @@ namespace Events
 						for (int c = 0; c < infected[disval].size(); c++) {
 							auto itr = cellmates.find(infected[disval][c]->GetFormID());
 							if (itr != cellmates.end()) {
-								auto vec = itr->second;
+								auto& vec = itr->second;
 								float scale = 0;
 								LOG1_1("{}[Events] [HandleEvents] Handling stage: {}", infected[disval][c]->FindDisease(disval)->stage);
 								// get disease stage of infected
@@ -522,7 +522,10 @@ namespace Events
 				#pragma omp parallel for num_threads(4) schedule(runtime)
 				for (int i = 0; i < actors.size(); i++)
 				{
-					actors[i]->ProgressAllDiseases();
+					if (actors[i]->ProgressAllDiseases() && Settings::Disease::_AllowActorDeath) {
+						logusage("[Events] [HandleActors] Actor {} has died from their disease", Utility::PrintFormNonDebug(actors[i]));
+						actors[i]->Kill();
+					}
 				}
 
 				PROF1_1("{}[Events] [HandleActors] execution time: Progress: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - last).count()));

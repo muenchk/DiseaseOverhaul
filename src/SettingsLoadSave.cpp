@@ -249,8 +249,10 @@ void Settings::Load()
 
 	Settings::System::_cycletime = ini.GetLongValue("General", "CycleWaitTime", Settings::System::_cycletime);
 	loginfo("[SETTNGS] {} {}", "CycleWaitTime", std::to_string(Settings::System::_cycletime));
-	System::_ticklength = (float)ini.GetDoubleValue("Game", "TickLength", 0.005);
+	System::_ticklength = (float)ini.GetDoubleValue("Game", "TickLength", System::_ticklength);
 	loginfo("[Settings] {} {}", "TickLength", std::to_string(System::_ticklength));
+	System::_showDiseaseEffects = (float)ini.GetDoubleValue("Game", "ShowDiseaseEffects", System::_showDiseaseEffects);
+	loginfo("[Settings] {} {}", "ShowDiseaseEffects", std::to_string(System::_showDiseaseEffects));
 
 	// Debugging
 	Debug::EnableLog = ini.GetBoolValue("Debug", "EnableLogging", Debug::EnableLog);
@@ -280,6 +282,8 @@ void Settings::Load()
 	loginfo("[Settings] {} {}", "ParticleInfectionRange", std::to_string(Disease::_particleRange));
 	Disease::_ignoreTimeAdvancementConstraint = (float)ini.GetDoubleValue("Game", "IgnoreTimeAdvancementConstraints", Disease::_ignoreTimeAdvancementConstraint);
 	loginfo("[Settings] {} {}", "IgnoreTimeAdvancementConstraints", std::to_string(Disease::_ignoreTimeAdvancementConstraint));
+	Disease::_AllowActorDeath = (float)ini.GetDoubleValue("Game", "AllowActorDeath", Disease::_AllowActorDeath);
+	loginfo("[Settings] {} {}", "AllowActorDeath", std::to_string(Disease::_AllowActorDeath));
 
 	Save();
 
@@ -341,6 +345,7 @@ void Settings::Save()
 	ini.SetBoolValue("Game", "IgnoreDiseaseResistance", Disease::_ignoreDiseaseResistance, "// Ignores any disease resistance");
 	ini.SetDoubleValue("Game", "ParticleInfectionRange", Disease::_particleRange, "// Range at which npcs can infect each other via particle infection");
 	ini.SetBoolValue("Game", "IgnoreTimeAdvancementConstraints", Disease::_ignoreTimeAdvancementConstraint, "// Ignores the minimum time needed for stage advancement");
+	ini.SetBoolValue("Game", "AllowActorDeath", Disease::_AllowActorDeath, "// Kills actors when a disease goes beyond the final stage, according to the diseases properties.");
 
 	ini.SaveFile(path);
 }

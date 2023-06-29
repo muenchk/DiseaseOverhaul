@@ -119,4 +119,9 @@ public:
 	static std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> GetActorDistancesList(std::vector<std::shared_ptr<ActorInfo>> actors1, std::vector<std::shared_ptr<ActorInfo>> actors2, float distancethreshold, bool onlyiteriors = false);
 
 	static uint64_t Sum(std::vector<uint64_t> vec);
+
+	static std::string Concat(std::vector<std::string> vec);
+	static std::string Concat(std::set<std::string> vec);
+	static std::string Concat(std::set<RE::FormID> vec);
+	static std::string Concat(std::vector<std::tuple<Diseases::Disease, float /*chance*/, float /*scale*/>>* vec);
 };

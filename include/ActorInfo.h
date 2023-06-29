@@ -944,6 +944,11 @@ public:
 	/// </summary>
 	bool IsBleedingOut();
 
+	/// <summary>
+	/// Kills the actor, if they are not essential
+	/// </summary>
+	void Kill();
+
 	#pragma region Disease
 
 private:
@@ -989,7 +994,7 @@ public:
 	/// <param name="actor"></param>
 	/// <param name="value"></param>
 	/// <returns>whether the actor should die</returns>
-	bool ForceIncreaseStage(Diseases::Disease value);
+	[[nodiscard]] bool ForceIncreaseStage(Diseases::Disease value);
 
 	/// <summary>
 	/// Forces a decrease in stage of a disease
@@ -1025,7 +1030,7 @@ public:
 
 	void AddDiseasePoints(Diseases::Disease disval, float points);
 
-	bool ProgressAllDiseases();
+	[[nodiscard]] bool ProgressAllDiseases();
 
 	void SetDiseaseTicks(int ticks) { currentticks = ticks; }
 

@@ -79,7 +79,7 @@ public:
 	/// <summary>
 	/// map that contains diseases an actor/etc. may be infected with at initialization
 	/// </summary>
-	std::unordered_map<uint32_t, std::unique_ptr<std::vector<Diseases::Disease>>> diseasesAssoc;
+	std::unordered_map<uint32_t, std::unique_ptr<std::vector<std::tuple<Diseases::Disease, float /*chance*/, float /*scale*/>>>> diseasesAssoc;
 
 	/// <summary>
 	/// map that contains
@@ -267,7 +267,7 @@ public:
 	/// </summary>
 	/// <param name="acinfo"></param>
 	/// <returns>vector of possible infections, vector of forced infections</returns>
-	std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> GetPossibleInfections(std::shared_ptr<ActorInfo> const& acinfo, Misc::NPCTPLTInfo* tpltinfo);
+	std::pair<std::unordered_map<Diseases::Disease, std::pair<float /*chance*/, float /*scale*/>> , std::set<Diseases::Disease>> GetPossibleInfections(std::shared_ptr<ActorInfo> const& acinfo, Misc::NPCTPLTInfo* tpltinfo);
 
 	void AddDiseaseStage(std::shared_ptr<DiseaseStage> stage, uint16_t stageid);
 	void InitDisease(std::shared_ptr<Disease> disease, uint16_t stageinfection, uint16_t stageincubation, std::vector<uint16_t> stageids);

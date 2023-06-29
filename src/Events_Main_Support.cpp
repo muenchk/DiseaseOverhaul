@@ -82,11 +82,9 @@ namespace Events
 		if (acinfo->ProcessedInitialInfections() == false) {
 			LOG1_1("{}[Events] [ProcessInfections] Actor {}", Utility::PrintForm(acinfo));
 			/* auto tplt = Utility::ExtractTemplateInfo(acinfo->GetActor());*/
-			auto [infections_possible_set, infections_forced_set] = data->GetPossibleInfections(acinfo, nullptr/*&tplt*/);
-			std::vector<Diseases::Disease> infections_possible;
+			auto [infections_possible, infections_forced_set] = data->GetPossibleInfections(acinfo, nullptr /*&tplt*/);
 			std::vector<Diseases::Disease> infections_forced;
 			try {
-				std::for_each(infections_possible_set.begin(), infections_possible_set.end(), [&infections_possible](Diseases::Disease dis) { infections_possible.push_back(dis); });
 				std::for_each(infections_forced_set.begin(), infections_forced_set.end(), [&infections_forced](Diseases::Disease dis) { infections_forced.push_back(dis); });
 			} catch (std::bad_alloc& e) {
 				LOG_1("{}[Events] [ProcessInfections] Error");
@@ -100,21 +98,23 @@ namespace Events
 				if (infections_forced.size() > 0) {
 					std::uniform_int_distribution<signed> rand(0, infections_forced.size() - 1);
 					int count = rand5(Random::rand);
+					auto dis = infections_forced[rand(Random::rand)];
+					LOG1_1("{}[Events] [ProcessInfections] Forced Infection {}", UtilityAlch::ToString(dis));
 					for (int i = 1; i <= count; i++) {
-						auto dis = infections_forced[rand(Random::rand)];
-						acinfo->ForceIncreaseStage(dis);
-						acinfo->ProgressDisease(dis, Random::rand1000(Random::rand));
+						static_cast<void>(acinfo->ForceIncreaseStage(dis));
 					}
+					static_cast<void>(acinfo->ProgressDisease(dis, Random::rand1000(Random::rand)));
 				} else if (infections_possible.size() > 0) {
-					for (int i = 0; i < infections_possible.size(); i++)
-					{
-						if (UtilityAlch::CalcChance(data->GetDisease(infections_possible[i])->_baseInfectionChance))
+					for (auto& [dis, value] : infections_possible) {
+						LOG1_1("{}[Events] [ProcessInfections] Possible Infection {}", UtilityAlch::ToString(dis));
+						auto& [chance, scale] = value;
+						if (UtilityAlch::CalcChance(data->GetDisease(dis)->_baseInfectionChance))
 						{
 							int count = rand5(Random::rand);
 							for (int i = 1; i <= count; i++) {
-								acinfo->ForceIncreaseStage(infections_possible[i]);
-								acinfo->ProgressDisease(infections_possible[i], Random::rand1000(Random::rand));
+								static_cast<void>(acinfo->ForceIncreaseStage(dis));
 							}
+							static_cast<void>(acinfo->ProgressDisease(dis, Random::rand1000(Random::rand)));
 							return;
 						}
 					}
@@ -126,22 +126,44 @@ namespace Events
 
 				// first remove forced infections from the possible ones
 				for (auto dis : infections_forced_set)
-					infections_possible_set.erase(dis);
+					infections_possible.erase(dis);
 
 				// process forced infections
 				for (auto dis : infections_forced_set) {
 					LOG1_1("{}[Events] [ProcessInfections] Forced Infection {}", UtilityAlch::ToString(dis));
 					int count = rand5(Random::rand);
 					for (int i = 1; i <= count; i++)
-						acinfo->ForceIncreaseStage(dis);
+						static_cast<void>(acinfo->ForceIncreaseStage(dis));
 				}
 				// process possible infections
-				for (auto dis : infections_possible_set) {
-					LOG1_1("{}[Events] [ProcessInfections] Possible Infection {}", UtilityAlch::ToString(dis));
-					if (UtilityAlch::CalcChance(data->GetDisease(dis)->_baseInfectionChance)) {
-						int count = rand5(Random::rand);
-						for (int i = 1; i <= count; i++)
-							acinfo->ForceIncreaseStage(dis);
+				for (auto& [dis, value] : infections_possible) {
+					if (data->GetDisease(dis)) {
+						auto& [chance, scale] = value;
+						LOG1_1("{}[Events] [ProcessInfections] Possible Infection {}", UtilityAlch::ToString(dis));
+						auto dostuff = [&acinfo, &dis, &rand5]() {
+							int count = rand5(Random::rand);
+							for (int i = 1; i <= count; i++)
+								static_cast<void>(acinfo->ForceIncreaseStage(dis));
+							static_cast<void>(acinfo->ProgressDisease(dis, Random::rand1000(Random::rand)));
+						};
+						if (chance == 0 && scale == 0) {
+							
+							if (UtilityAlch::CalcChance(data->GetDisease(dis)->_baseInfectionChance))
+								dostuff();
+						} else if (chance == 0 && scale != 0) {
+							if (UtilityAlch::CalcChance(scale * data->GetDisease(dis)->_baseInfectionChance))
+								dostuff();
+						} else if (chance != 0) {
+							if (UtilityAlch::CalcChance(chance))
+								dostuff();
+						}
+
+						/* if (UtilityAlch::CalcChance(chance == 0 ? scale == 0 ? data->GetDisease(dis)->_baseInfectionChance : scale * data->GetDisease(dis)->_baseInfectionChance : chance)) {
+							int count = rand5(Random::rand);
+							for (int i = 1; i <= count; i++)
+								static_cast<void>(acinfo->ForceIncreaseStage(dis));
+							static_cast<void>(acinfo->ProgressDisease(dis, Random::rand1000(Random::rand)));
+						}*/
 					}
 				}
 			}

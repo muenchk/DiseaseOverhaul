@@ -18,8 +18,8 @@ namespace Papyrus
 				{
 					if (acinfo->IsInfected(Diseases::Disease::kSanguinareVampirism) == false) {
 						// Skip directly to first stage
-						acinfo->ForceIncreaseStage(Diseases::Disease::kSanguinareVampirism);
-						acinfo->ForceIncreaseStage(Diseases::Disease::kSanguinareVampirism);
+						static_cast<void>(acinfo->ForceIncreaseStage(Diseases::Disease::kSanguinareVampirism));
+						static_cast<void>(acinfo->ForceIncreaseStage(Diseases::Disease::kSanguinareVampirism));
 					}
 					else
 					{

@@ -1578,4 +1578,18 @@ bool ActorInfo::IsBleedingOut()
 	return false;
 }
 
+void ActorInfo::Kill()
+{
+	aclock;
+	if (!valid || dead)
+		return;
+
+	if (RE::Actor* _actor = actor.get().get(); _actor != nullptr)
+	{
+		if (_actor->IsEssential() == false)
+		{
+			_actor->KillImmediate();
+		}
+	}
+}
 #pragma endregion

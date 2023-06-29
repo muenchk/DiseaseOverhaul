@@ -1186,7 +1186,7 @@ void Data::ResetDiseases()
 	diseaseStagesMap.clear();
 }
 
-std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPossibleInfections(std::shared_ptr<ActorInfo> const& acinfo, Misc::NPCTPLTInfo* tpltinfo)
+std::pair<std::unordered_map<Diseases::Disease, std::pair<float /*chance*/, float /*scale*/>> , std::set<Diseases::Disease>> Data::GetPossibleInfections(std::shared_ptr<ActorInfo> const& acinfo, Misc::NPCTPLTInfo* tpltinfo)
 {
 	auto begin = std::chrono::steady_clock::now();
 	if (acinfo == nullptr || acinfo->IsValid() == false) {
@@ -1199,7 +1199,29 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 		tpltinfo = &tplt;
 	}
 
-	std::set<Diseases::Disease> infec;
+	std::unordered_map<Diseases::Disease, std::pair<float /*chance*/, float /*scale*/>> infec;
+	auto infecinsert = [&infec](std::tuple < Diseases::Disease, float, float> tup) {
+		auto [dis, chance, scale] = tup;
+		auto itr = infec.find(dis);
+		if (itr != infec.end())
+		{
+			auto [origchance, origscale] = itr->second;
+			if (origchance == 0 && chance != 0 ||
+				origchance != 0 && chance != 0 && chance > origchance ||
+				origchance == 0 && chance == 0 && scale > origscale)
+			{
+				infec.insert_or_assign(dis, std::pair<float, float>{ chance, scale });
+			}
+			else
+			{
+				// what we have has the larger chance in the end
+			}
+		}
+		else
+		{
+			infec.insert_or_assign(dis, std::pair<float, float>{ chance, scale });
+		}
+	};
 	std::set<Diseases::Disease> infecforce;
 
 	auto base = acinfo->GetActorBase();
@@ -1216,8 +1238,9 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 
 	auto itnpc = diseasesAssoc.find(acinfo->GetFormID());
 	if (itnpc != diseasesAssoc.end() && itnpc->second) {  // found the right rule!
-		for (int i = 0; i < itnpc->second->size(); i++)
-			infec.insert(itnpc->second->at(i));
+		for (int i = 0; i < itnpc->second->size(); i++) {
+			infecinsert(itnpc->second->at(i));
+		}
 	}
 
 	// search for base npc
@@ -1229,7 +1252,7 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 	itnpc = diseasesAssoc.find(acinfo->GetActorBaseFormID());
 	if (itnpc != diseasesAssoc.end() && itnpc->second) {  // found the right rule!
 		for (int i = 0; i < itnpc->second->size(); i++)
-			infec.insert(itnpc->second->at(i));
+			infecinsert(itnpc->second->at(i));
 	}
 
 	// perform check on tpltactorbaseinformation
@@ -1241,7 +1264,7 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 		itnpc = diseasesAssoc.find(tpltinfo->base->GetFormID());
 		if (itnpc != diseasesAssoc.end() && itnpc->second) {  // found the right rule!
 			for (int i = 0; i < itnpc->second->size(); i++)
-				infec.insert(itnpc->second->at(i));
+				infecinsert(itnpc->second->at(i));
 		}
 	}
 
@@ -1252,12 +1275,12 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 	auto it = diseasesAssoc.find(race->GetFormID());
 	if (it != diseasesAssoc.end())
 		for (int i = 0; i < it->second->size(); i++)
-			infec.insert(it->second->at(i));
+			infecinsert(it->second->at(i));
 	for (uint32_t i = 0; i < race->numKeywords; i++) {
 		auto itr = diseasesAssoc.find(race->keywords[i]->GetFormID());
 		if (itr != diseasesAssoc.end()) {
 			for (int i = 0; i < itr->second->size(); i++)
-				infec.insert(itr->second->at(i));
+				infecinsert(itr->second->at(i));
 		}
 	}
 	auto itf = diseasesForceAssoc.find(race->GetFormID());
@@ -1278,7 +1301,7 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 			auto it = diseasesAssoc.find(key->GetFormID());
 			if (it != diseasesAssoc.end())
 				for (int i = 0; i < it->second->size(); i++)
-					infec.insert(it->second->at(i));
+					infecinsert(it->second->at(i));
 
 			auto itr = diseasesForceAssoc.find(key->GetFormID());
 			if (itr != diseasesForceAssoc.end())
@@ -1292,7 +1315,7 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 				auto it = diseasesAssoc.find(tpltinfo->tpltkeywords[i]->GetFormID());
 				if (it != diseasesAssoc.end())
 					for (int i = 0; i < it->second->size(); i++)
-						infec.insert(it->second->at(i));
+						infecinsert(it->second->at(i));
 				auto itr = diseasesForceAssoc.find(tpltinfo->tpltkeywords[i]->GetFormID());
 				if (itr != diseasesForceAssoc.end())
 					infecforce.insert(itr->second);
@@ -1305,7 +1328,7 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 		auto it = diseasesAssoc.find(base->factions[i].faction->GetFormID());
 		if (it != diseasesAssoc.end()) {
 			for (int i = 0; i < it->second->size(); i++)
-				infec.insert(it->second->at(i));
+				infecinsert(it->second->at(i));
 		}
 		auto itr = diseasesForceAssoc.find(base->factions[i].faction->GetFormID());
 		if (itr != diseasesForceAssoc.end()) {
@@ -1318,7 +1341,7 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 				auto it = diseasesAssoc.find(tpltinfo->tpltfactions[i]->GetFormID());
 				if (it != diseasesAssoc.end()) {
 					for (int i = 0; i < it->second->size(); i++)
-						infec.insert(it->second->at(i));
+						infecinsert(it->second->at(i));
 				}
 				auto itr = diseasesForceAssoc.find(tpltinfo->tpltfactions[i]->GetFormID());
 				if (itr != diseasesForceAssoc.end()) {
@@ -1335,7 +1358,7 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 		auto it = diseasesAssoc.find(base->npcClass->GetFormID());
 		if (it != diseasesAssoc.end()) {
 			for (int i = 0; i < it->second->size(); i++)
-				infec.insert(it->second->at(i));
+				infecinsert(it->second->at(i));
 		}
 		auto itr = diseasesForceAssoc.find(base->npcClass->GetFormID());
 		if (itr != diseasesForceAssoc.end()) {
@@ -1347,7 +1370,7 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 		auto it = diseasesAssoc.find(base->combatStyle->GetFormID());
 		if (it != diseasesAssoc.end()) {
 			for (int i = 0; i < it->second->size(); i++)
-				infec.insert(it->second->at(i));
+				infecinsert(it->second->at(i));
 		}
 		auto itr = diseasesForceAssoc.find(base->combatStyle->GetFormID());
 		if (itr != diseasesForceAssoc.end()) {
@@ -1357,7 +1380,7 @@ std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>> Data::GetPos
 
 	PROF1_1("{}[Data] [GetPossibleInfections] execution time: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()));
 
-	return std::pair<std::set<Diseases::Disease>, std::set<Diseases::Disease>>{ infec, infecforce };
+	return std::pair<std::unordered_map<Diseases::Disease, std::pair<float /*chance*/, float /*scale*/>>, std::set<Diseases::Disease>>{ infec, infecforce };
 }
 
 void Data::PatchGameObjects()

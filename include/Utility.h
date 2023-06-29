@@ -174,6 +174,7 @@ public:
 
 		return std::string("[") + typeid(T).name() + "<" + Utility::GetHex(form->GetFormID()) + "><" + form->GetName() + "><" + plugin + ">]";
 	}
+	static std::string PrintFormNonDebug(std::shared_ptr<ActorInfo> const& acinfo);
 
 	/// <summary>
 	/// Converts all symbols in a string into lower case.

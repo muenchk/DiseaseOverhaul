@@ -481,3 +481,35 @@ uint64_t UtilityAlch::Sum(std::vector<uint64_t> vec)
 		sum += vec[i];
 	return sum;
 }
+
+std::string UtilityAlch::Concat(std::vector<std::string> vec)
+{
+	std::string result = "|";
+	for (auto& str : vec)
+		result += str + "|";
+	return result;
+}
+
+std::string UtilityAlch::Concat(std::set<std::string> vec)
+{
+	std::string result = "|";
+	for (auto& str : vec)
+		result += str + "|";
+	return result;
+}
+
+std::string UtilityAlch::Concat(std::set<RE::FormID> vec)
+{
+	std::string result = "|";
+	for (auto& id : vec)
+		result += GetHex(id) + "|";
+	return result;
+}
+
+std::string UtilityAlch::Concat(std::vector<std::tuple<Diseases::Disease, float /*chance*/, float /*scale*/>>* vec) {
+	std::string result = "|";
+	for (auto& [dis, chance, scale] : *vec)
+		result += ToString(dis) + "|";
+	return result;
+}
+

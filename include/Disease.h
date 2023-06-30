@@ -110,8 +110,9 @@ struct PermanentModifiers
 		kPotionOfCureCholera = 1 << 6,
 		kPotionOfCureLeprosy = 1 << 7,
 		kPotionOfCurePlague = 1 << 8,
-		kPotionOfCureSanguinareVampirism = 1 << 8,
+		kPotionOfCureSanguinareVampirism = 1 << 9,
 		kShrine = 1 << 10,
+		kPotionOfCureStrongDisease = 1 << 11,
 
 		kMaxValue = 12,
 	};

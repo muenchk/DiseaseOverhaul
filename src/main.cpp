@@ -162,8 +162,8 @@ void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
 		logger::info("Registered Events");
 		// register data storage
 		Storage::Register();
-		// init diseases
-		//Data::GetSingleton()->InitDiseases();
+		// init disease stuff
+		Data::GetSingleton()->InitDiseases();
 		// init worldspace data
 		World::GetSingleton()->Init();
 		PROF1_1("{}[main] [Startup] execution time: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()));

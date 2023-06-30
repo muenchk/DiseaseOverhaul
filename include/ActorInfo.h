@@ -14,6 +14,8 @@ namespace Events
 
 class Data;
 
+class CureDiseaseOption;
+
 #define aclock ((void)0);  //std::lock_guard<std::mutex> guard(mutex);
 
 /// <summary>
@@ -1039,6 +1041,10 @@ public:
 	void SetDiseaseLastTime(float time) { LastGameTime = time; }
 
 	float GetDiseaseLastTime() { return LastGameTime; }
+
+	void ApplyDiseaseModifier(Diseases::Disease disease, CureDiseaseOption* cure);
+
+	void PerformingPhysicalAction();
 
 	#pragma endregion
 };

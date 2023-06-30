@@ -1387,7 +1387,7 @@ Distribution::AssocType Utility::MatchValidFormType(RE::FormType type, bool& val
 		return Distribution::AssocType::kActor;
 	case RE::FormType::Reference:
 		valid = true;
-		return Distribution::AssocType::kItem;
+		return Distribution::AssocType::kObjectReference;
 	case RE::FormType::Class:
 		valid = true;
 		return Distribution::AssocType::kClass;
@@ -1409,6 +1409,9 @@ Distribution::AssocType Utility::MatchValidFormType(RE::FormType type, bool& val
 	case RE::FormType::MagicEffect:
 		valid = true;
 		return Distribution::AssocType::kEffectSetting;
+	case RE::FormType::Activator:
+		valid = true;
+		return Distribution::AssocType::kActivator;
 	default:
 		valid = false;
 		return Distribution::AssocType::kKeyword;

@@ -17,18 +17,20 @@ public:
 	/// </summary>
 	enum AssocType
 	{
-		kKeyword = 1,
-		kFaction = 2,
-		kRace = 4,
-		kActor = 8,
-		kNPC = 16,
-		kItem = 32,
-		kClass = 64,
-		kCombatStyle = 128,
-		kEffectSetting = 256,
-		kCell = 512,
-		kWeather = 1024,
-		kTextureSet = 2048,
+		kKeyword = 1 << 0,
+		kFaction = 1 << 1,
+		kRace = 1 << 2,
+		kActor = 1 << 3,
+		kNPC = 1 << 4,
+		kItem = 1 << 5,
+		kClass = 1 << 6,
+		kCombatStyle = 1 << 7,
+		kEffectSetting = 1 << 8,
+		kCell = 1 << 9,
+		kWeather = 1 << 10,
+		kTextureSet = 1 << 11,
+		kObjectReference = 1 << 12,
+		kActivator = 1 << 13,
 	};
 
 	class CustomItemStorage;

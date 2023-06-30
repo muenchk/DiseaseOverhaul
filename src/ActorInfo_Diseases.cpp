@@ -559,4 +559,24 @@ void ActorInfo::ResetDiseases()
 	disflagsprog = 0;
 }
 
+void ActorInfo::ApplyDiseaseModifier(Diseases::Disease disease, CureDiseaseOption* cure)
+{
+	if (auto dinfo = FindDisease(disease); dinfo)
+	{
+		if (dinfo->permanentModifiers & static_cast<EnumType>(cure->modifier))
+		{
+			// already applied, so apply adjusted strength
+			dinfo->permanentModifiersPoints -= cure->strengthadditional;
+		}
+		else
+		{
+			// not applied so far, so save application and adjust points
+			dinfo->permanentModifiers |= static_cast<EnumType>(cure->modifier);
+			dinfo->permanentModifiersPoints -= cure->strengthfirst;
+		}
+	}
+}
+
+
+
 #pragma endregion

@@ -3458,6 +3458,38 @@ void Settings::LoadDistrConfig()
 									delete splits;
 								}
 								break;
+							case 107:  // disease: define shrine
+								{
+									LOGLE_2("[Settings] [LoadDistrRules] Define texture properties");
+									if (splits->size() != 4) {
+										logger::warn("[Settings] [LoadDistrRules] rule has wrong number of fields, expected 3. file: {}, rule:\"{}\", fields: {}", file, tmp, splits->size());
+										continue;
+									}
+
+									std::string assoc = splits->at(splitindex);
+									splitindex++;
+									bool error = false;
+									int total = 0;
+									std::vector<std::tuple<Distribution::AssocType, RE::FormID>> items = UtilityAlch::ParseAssocObjects(assoc, error, file, tmp, total);
+									for (int i = 0; i < items.size(); i++) {
+										switch (std::get<0>(items[i])) {
+										case Distribution::AssocType::kObjectReference:
+											{
+												auto data = Data::GetSingleton();
+												data->shrines.insert(std::get<1>(items[i]));
+											}
+											break;
+										case Distribution::AssocType::kActivator:
+											{
+												auto data = Data::GetSingleton();
+												data->shrines.insert(std::get<1>(items[i]));
+											}
+											break;
+										}
+									}
+									delete splits;
+								}
+								break;
 							default:
 								logger::warn("[Settings] [LoadDistrConfig] Rule type does not exist. file: {}, rule:\"{}\"", file, tmp);
 								delete splits;

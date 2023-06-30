@@ -729,334 +729,270 @@ std::shared_ptr<Disease> Data::GetDisease(Diseases::Disease value)
 
 void Data::InitDiseases()
 {
-	auto datahandler = RE::TESDataHandler::GetSingleton();
-	std::shared_ptr<DiseaseStage> stage = nullptr;
-	std::pair<float, float> tint; 
-	RE::TESForm* tmp = nullptr;
-	RE::SpellItem* spell = nullptr;
-	for (int i = 0; i < Diseases::kMaxValue; i++) {
-		diseases[i] = {};
-	}
-	// Ash Woe Blight
+	// init permanent modifier stuff
+	
+	// kPotionOfCureCommonDisease
 	{
-		diseases[Diseases::kAshWoeBlight]->_name = UtilityAlch::ToString(Diseases::kAshWoeBlight);
-		diseases[Diseases::kAshWoeBlight]->_type = DiseaseType::kBlight;
-		diseases[Diseases::kAshWoeBlight]->_numstages = 4;
-		diseases[Diseases::kAshWoeBlight]->_stageInfection->_advancementThreshold = 100;
-		diseases[Diseases::kAshWoeBlight]->_baseProgressionPoints = 0;
-		diseases[Diseases::kAshWoeBlight]->_baseInfectionReductionPoints = 1;
-		diseases[Diseases::kAshWoeBlight]->_baseInfectionChance = 3;
-		diseases[Diseases::kAshWoeBlight]->_validModifiers = PermanentModifiers::kPotionOfCureBlight | PermanentModifiers::kSpellOfCureBlight | PermanentModifiers::kShrine;
-		diseases[Diseases::kAshWoeBlight]->_stages = new std::shared_ptr<DiseaseStage>[diseases[Diseases::kAshWoeBlight]->_numstages + 1];
+		RE::TESForm* form = Utility::GetTESForm(datahandler, 0x800, Settings::PluginName);
+		if (form) {
+			CureDiseaseOption* opt = new CureDiseaseOption();
+			opt->id = 0x0;
+			opt->type = CureDiseaseOption::CureDiseaseType::Potion;
+			opt->modifier = PermanentModifiers::kPotionOfCureCommonDisease;
+			opt->strengthfirst = 6;
+			opt->strengthadditional = 3;
 
-		auto stageinfection = diseases[Diseases::kAshWoeBlight]->_stageInfection;
-		stageinfection->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
-		stageinfection->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
-		stageinfection->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
-		stageinfection->_spreading[Spreading::kAir] = { 0.0f, 0.0f };
-		stageinfection->_spreading[Spreading::kParticle] = { 6.0f, 1.0f };
-		stageinfection->_spreading[Spreading::kIntenseCold] = { 0.0f, 0.0f };
-		stageinfection->_spreading[Spreading::kIntenseHeat] = { 0.0f, 0.0f };
-		stageinfection->_spreading[Spreading::kInAshland] = { 1.0f, 1.0f };
-		stageinfection->_spreading[Spreading::kInSwamp] = { 0.0f, 0.0f };
-		stageinfection->_spreading[Spreading::kInDessert] = { 0.0f, 0.0f };
-		stageinfection->_spreading[Spreading::kInAshstorm] = { 10.0f, 1.0f };
-		stageinfection->_spreading[Spreading::kInSandstorm] = { 0.0f, 0.0f };
-		stageinfection->_spreading[Spreading::kInBlizzard] = { 0.0f, 0.0f };
-		stageinfection->_spreading[Spreading::kInRain] = { 0.0f, 0.0f };
-		stageinfection->_spreading[Spreading::kIsWindy] = { 0.0f, 0.0f };
-		stageinfection->_spreading[Spreading::kIsStormy] = { 0.0f, 0.0f };
-		stageinfection->_spreading[Spreading::kIsCold] = { 0.0f, 0.0f };
-		stageinfection->_spreading[Spreading::kIsHeat] = { 0.0f, 0.0f };
-		// infection
-		{
-			diseases[Diseases::kAshWoeBlight]->_stageInfection->_advancementThreshold = 100;
-			diseases[Diseases::kAshWoeBlight]->_stageInfection->_advancementTime = 0;
-			diseases[Diseases::kAshWoeBlight]->_stageInfection->_infectivity = Infectivity::kNone;
-		}
-		// incubation
-		{
-			stage = std::make_shared<DiseaseStage>();
-			stage->_advancementThreshold = 2160;
-			stage->_advancementTime = 3.0;
-			stage->_infectivity = Infectivity::kLow;
-			// ashstorm
-			stage->_spreading[Spreading::kInAshstorm] = { 100.0f /*guarantied chance*/, 6.0f /*points per tick*/ };
-			// ashland
-			stage->_spreading[Spreading::kInAshland] = { 100.0f, 1.0f };
-			stage->_spreading[Spreading::kParticle] = { 6.0f, 1.0f };
-			stage->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
-			stage->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
-			stage->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
-			stage->effect = nullptr;
-			diseases[Diseases::kAshWoeBlight]->_stages[0] = stage;
-		}
-		// stage 1
-		{
-			stage = std::make_shared<DiseaseStage>();
-			stage->_advancementThreshold = 2160;
-			stage->_advancementTime = 3.0;
-			stage->_infectivity = Infectivity::kNormal;
-			// ashstorm
-			tint = { 100.0f /*guarantied chance*/, 8.0f /*points per tick*/ };
-			stage->_spreading[Spreading::kInAshstorm] = tint;
-			// ashland
-			tint = { 100.0f, 1.0f };
-			stage->_spreading[Spreading::kInAshland] = tint;
-			tint = { 6.0f, 1.0f };
-			stage->_spreading[Spreading::kParticle] = tint;
-			stage->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
-			stage->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
-			stage->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
-			if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x5907, Settings::PluginName, "")) != nullptr) {
-				if ((spell = tmp->As<RE::SpellItem>()) != nullptr)
-					stage->effect = spell;
+			// get diseases with this modifier
+			for (int i = 0; i < Diseases::kMaxValue; i++)
+			{
+				if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis)
+				{
+					if (dis->_validModifiers & static_cast<EnumType>(opt->modifier))
+						opt->diseases.push_back(static_cast<Diseases::Disease>(i));
+				}
 			}
-			diseases[Diseases::kAshWoeBlight]->_stages[1] = stage;
+
+			cureOptions.insert_or_assign(form->GetFormID(), opt);
 		}
-		// stage 2
-		{
-			stage = std::make_shared<DiseaseStage>();
-			stage->_advancementThreshold = 3600;
-			stage->_advancementTime = 5.0;
-			stage->_infectivity = Infectivity::kHigher;
-			// ashstorm
-			tint = { 100.0f /*guarantied chance*/, 10.0f /*points per tick*/ };
-			stage->_spreading[Spreading::kInAshstorm] = tint;
-			// ashland
-			tint = { 100.0f, 1.5f };
-			stage->_spreading[Spreading::kInAshland] = tint;
-			tint = { 6.0f, 1.0f };
-			stage->_spreading[Spreading::kParticle] = tint;
-			stage->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
-			stage->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
-			stage->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
-			// AEXTDiseaseAshWoeBlight2
-			if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x5908, Settings::PluginName, "")) != nullptr) {
-				if ((spell = tmp->As<RE::SpellItem>()) != nullptr)
-					stage->effect = spell;
+	}
+	// kPotionOfStrongCureCommonDisease
+	{
+		RE::TESForm* form = Utility::GetTESForm(datahandler, 0x801, Settings::PluginName);
+		if (form) {
+			CureDiseaseOption* opt = new CureDiseaseOption();
+			opt->id = 0x1;
+			opt->type = CureDiseaseOption::CureDiseaseType::Potion;
+			opt->modifier = PermanentModifiers::kPotionOfStrongCureCommonDisease;
+			opt->strengthfirst = 12;
+			opt->strengthadditional = 6;
+
+			// get diseases with this modifier
+			for (int i = 0; i < Diseases::kMaxValue; i++) {
+				if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis) {
+					if (dis->_validModifiers & static_cast<EnumType>(opt->modifier))
+						opt->diseases.push_back(static_cast<Diseases::Disease>(i));
+				}
 			}
-			diseases[Diseases::kAshWoeBlight]->_stages[2] = stage;
+
+			cureOptions.insert_or_assign(form->GetFormID(), opt);
 		}
-		// stage 3
-		{
-			stage = std::make_shared<DiseaseStage>();
-			stage->_advancementThreshold = 3600;
-			stage->_advancementTime = 5.0;
-			stage->_infectivity = Infectivity::kHigher;
-			// ashstorm
-			tint = { 100.0f /*guarantied chance*/, 12.0f /*points per tick*/ };
-			stage->_spreading[Spreading::kInAshstorm] = tint;
-			// ashland
-			tint = { 100.0f, 1.5f };
-			stage->_spreading[Spreading::kInAshland] = tint;
-			tint = { 6.0f, 1.0f };
-			stage->_spreading[Spreading::kParticle] = tint;
-			stage->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
-			stage->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
-			stage->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
-			// AEXTDiseaseAshWoeBlight3
-			if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x5909, Settings::PluginName, "")) != nullptr) {
-				if ((spell = tmp->As<RE::SpellItem>()) != nullptr)
-					stage->effect = spell;
+	}
+	// kPotionOfCureBlight
+	{
+		RE::TESForm* form = Utility::GetTESForm(datahandler, 0x802, Settings::PluginName);
+		if (form) {
+			CureDiseaseOption* opt = new CureDiseaseOption();
+			opt->id = 0x2;
+			opt->type = CureDiseaseOption::CureDiseaseType::Potion;
+			opt->modifier = PermanentModifiers::kPotionOfCureBlight;
+			opt->strengthfirst = 6;
+			opt->strengthadditional = 3;
+
+			// get diseases with this modifier
+			for (int i = 0; i < Diseases::kMaxValue; i++) {
+				if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis) {
+					if (dis->_validModifiers & static_cast<EnumType>(opt->modifier))
+						opt->diseases.push_back(static_cast<Diseases::Disease>(i));
+				}
 			}
-			diseases[Diseases::kAshWoeBlight]->_stages[3] = stage;
+	
+			cureOptions.insert_or_assign(form->GetFormID(), opt);
 		}
-		// stage 4
-		{
-			stage = std::make_shared<DiseaseStage>();
-			stage->_advancementThreshold = 5040;
-			stage->_advancementTime = 7.0;
-			stage->_infectivity = Infectivity::kHigher;
-			// ashstorm
-			tint = { 100.0f /*guarantied chance*/, 15.0f /*points per tick*/ };
-			stage->_spreading[Spreading::kInAshstorm] = tint;
-			// ashland
-			tint = { 100.0f, 2.0f };
-			stage->_spreading[Spreading::kInAshland] = tint;
-			tint = { 6.0f, 1.0f };
-			stage->_spreading[Spreading::kParticle] = tint;
-			stage->_spreading[Spreading::kOnHitMelee] = { 15.0f, 50.0f };
-			stage->_spreading[Spreading::kOnHitRanged] = { 12.0f, 50.0f };
-			stage->_spreading[Spreading::kOnHitH2H] = { 17.0f, 50.0f };
-			// AEXTDiseaseAshWoeBlight3
-			if ((tmp = UtilityAlch::GetTESForm(datahandler, 0x590A, Settings::PluginName, "")) != nullptr) {
-				if ((spell = tmp->As<RE::SpellItem>()) != nullptr)
-					stage->effect = spell;
+	}
+	// kPotionOfCureFever
+	{
+		RE::TESForm* form = Utility::GetTESForm(datahandler, 0x803, Settings::PluginName);
+		if (form) {
+			CureDiseaseOption* opt = new CureDiseaseOption();
+			opt->id = 0x3;
+			opt->type = CureDiseaseOption::CureDiseaseType::Potion;
+			opt->modifier = PermanentModifiers::kPotionOfCureFever;
+			opt->strengthfirst = 6;
+			opt->strengthadditional = 3;
+
+			// get diseases with this modifier
+			for (int i = 0; i < Diseases::kMaxValue; i++) {
+				if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis) {
+					if (dis->_validModifiers & static_cast<EnumType>(opt->modifier))
+						opt->diseases.push_back(static_cast<Diseases::Disease>(i));
+				}
 			}
-			diseases[Diseases::kAshWoeBlight]->_stages[4] = stage;
+	
+			cureOptions.insert_or_assign(form->GetFormID(), opt);
 		}
-		diseases[Diseases::kAshWoeBlight]->CalcFlags();
-		spreadingDiseaseMap[Spreading::kInAshland].push_back(Diseases::kAshWoeBlight);
-		spreadingDiseaseMap[Spreading::kInAshstorm].push_back(Diseases::kAshWoeBlight);
 	}
-	// Black-Heart Blight
+	// kPotionOfStrongCureFever
 	{
-		diseases[Diseases::kBlackHeartBlight]->_name = UtilityAlch::ToString(Diseases::kBlackHeartBlight);
+		RE::TESForm* form = Utility::GetTESForm(datahandler, 0x804, Settings::PluginName);
+		if (form) {
+			CureDiseaseOption* opt = new CureDiseaseOption();
+			opt->id = 0x4;
+			opt->type = CureDiseaseOption::CureDiseaseType::Potion;
+			opt->modifier = PermanentModifiers::kPotionOfStrongCureFever;
+			opt->strengthfirst = 6;
+			opt->strengthadditional = 3;
+
+			// get diseases with this modifier
+			for (int i = 0; i < Diseases::kMaxValue; i++) {
+				if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis) {
+					if (dis->_validModifiers & static_cast<EnumType>(opt->modifier))
+						opt->diseases.push_back(static_cast<Diseases::Disease>(i));
+				}
+			}
+	
+			cureOptions.insert_or_assign(form->GetFormID(), opt);
+		}
 	}
-	// Ash Chancre
+	// kPotionOfCureCholera
 	{
-		diseases[Diseases::kAshChancre]->_name = UtilityAlch::ToString(Diseases::kAshChancre);
+		RE::TESForm* form = Utility::GetTESForm(datahandler, 0x805, Settings::PluginName);
+		if (form) {
+			CureDiseaseOption* opt = new CureDiseaseOption();
+			opt->id = 0x5;
+			opt->type = CureDiseaseOption::CureDiseaseType::Potion;
+			opt->modifier = PermanentModifiers::kPotionOfCureCholera;
+			opt->strengthfirst = 12;
+			opt->strengthadditional = 6;
+
+			// get diseases with this modifier
+			for (int i = 0; i < Diseases::kMaxValue; i++) {
+				if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis) {
+					if (dis->_validModifiers & static_cast<EnumType>(opt->modifier))
+						opt->diseases.push_back(static_cast<Diseases::Disease>(i));
+				}
+			}
+	
+			cureOptions.insert_or_assign(form->GetFormID(), opt);
+		}
 	}
-	// Chantrax Blight
+	// kPotionOfCureLeprosy
 	{
-		diseases[Diseases::kChantraxBlight]->_name = UtilityAlch::ToString(Diseases::kChantraxBlight);
+		RE::TESForm* form = Utility::GetTESForm(datahandler, 0x806, Settings::PluginName);
+		if (form) {
+			CureDiseaseOption* opt = new CureDiseaseOption();
+			opt->id = 0x7;
+			opt->type = CureDiseaseOption::CureDiseaseType::Potion;
+			opt->modifier = PermanentModifiers::kPotionOfCureLeprosy;
+			opt->strengthfirst = 12;
+			opt->strengthadditional = 6;
+
+			// get diseases with this modifier
+			for (int i = 0; i < Diseases::kMaxValue; i++) {
+				if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis) {
+					if (dis->_validModifiers & static_cast<EnumType>(opt->modifier))
+						opt->diseases.push_back(static_cast<Diseases::Disease>(i));
+				}
+			}
+	
+			cureOptions.insert_or_assign(form->GetFormID(), opt);
+		}
 	}
-	// Astral Vapors
+	// kPotionOfCurePlague
 	{
-		diseases[Diseases::kAstralVapors]->_name = UtilityAlch::ToString(Diseases::kAstralVapors);
+		RE::TESForm* form = Utility::GetTESForm(datahandler, 0x807, Settings::PluginName);
+		if (form) {
+			CureDiseaseOption* opt = new CureDiseaseOption();
+			opt->id = 0x8;
+			opt->type = CureDiseaseOption::CureDiseaseType::Potion;
+			opt->modifier = PermanentModifiers::kPotionOfCurePlague;
+			opt->strengthfirst = 12;
+			opt->strengthadditional = 6;
+
+			// get diseases with this modifier
+			for (int i = 0; i < Diseases::kMaxValue; i++) {
+				if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis) {
+					if (dis->_validModifiers & static_cast<EnumType>(opt->modifier))
+						opt->diseases.push_back(static_cast<Diseases::Disease>(i));
+				}
+			}
+	
+			cureOptions.insert_or_assign(form->GetFormID(), opt);
+		}
 	}
-	// Ataxia
+	// kPotionOfCureSanguinareVampirism
 	{
-		diseases[Diseases::kAtaxia]->_name = UtilityAlch::ToString(Diseases::kAtaxia);
+		RE::TESForm* form = Utility::GetTESForm(datahandler, 0x808, Settings::PluginName);
+		if (form) {
+			CureDiseaseOption* opt = new CureDiseaseOption();
+			opt->id = 0x9;
+			opt->type = CureDiseaseOption::CureDiseaseType::Potion;
+			opt->modifier = PermanentModifiers::kPotionOfCurePlague;
+			opt->strengthfirst = 6;
+			opt->strengthadditional = 0;
+
+			// get diseases with this modifier
+			for (int i = 0; i < Diseases::kMaxValue; i++) {
+				if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis) {
+					if (dis->_validModifiers & static_cast<EnumType>(opt->modifier))
+						opt->diseases.push_back(static_cast<Diseases::Disease>(i));
+				}
+			}
+	
+			cureOptions.insert_or_assign(form->GetFormID(), opt);
+		}
 	}
-	// Bloud-Lung
+	// kPotionOfCureStrongDisease
 	{
-		diseases[Diseases::kBloodLung]->_name = UtilityAlch::ToString(Diseases::kBloodLung);
+		RE::TESForm* form = Utility::GetTESForm(datahandler, 0x809, Settings::PluginName);
+		if (form) {
+			CureDiseaseOption* opt = new CureDiseaseOption();
+			opt->id = 0x10;
+			opt->type = CureDiseaseOption::CureDiseaseType::Potion;
+			opt->modifier = PermanentModifiers::kPotionOfCureStrongDisease;
+			opt->strengthfirst = 12;
+			opt->strengthadditional = 6;
+
+			// get diseases with this modifier
+			for (int i = 0; i < Diseases::kMaxValue; i++) {
+				if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis) {
+					if (dis->_validModifiers & static_cast<EnumType>(opt->modifier))
+						opt->diseases.push_back(static_cast<Diseases::Disease>(i));
+				}
+			}
+	
+			cureOptions.insert_or_assign(form->GetFormID(), opt);
+		}
 	}
-	// Blood-Rot
+
+	// kSpellOfCureBlight
 	{
-		diseases[Diseases::kBloodRot]->_name = UtilityAlch::ToString(Diseases::kBloodRot);
+		RE::TESForm* form = Utility::GetTESForm(datahandler, 0x0, Settings::PluginName);
+		if (form) {
+			CureDiseaseOption* opt = new CureDiseaseOption();
+			opt->id = 0x100;
+			opt->type = CureDiseaseOption::CureDiseaseType::Potion;
+			opt->modifier = PermanentModifiers::kPotionOfCureBlight;
+			opt->strengthfirst = 6;
+			opt->strengthadditional = 3;
+
+			// get diseases with this modifier
+			for (int i = 0; i < Diseases::kMaxValue; i++) {
+				if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis) {
+					if (dis->_validModifiers & static_cast<EnumType>(opt->modifier))
+						opt->diseases.push_back(static_cast<Diseases::Disease>(i));
+				}
+			}
+	
+			cureOptions.insert_or_assign(form->GetFormID(), opt);
+		}
 	}
-	// Brain Rot
+
+	// kShrine
 	{
-		diseases[Diseases::kBrainRot]->_name = UtilityAlch::ToString(Diseases::kBrainRot);
-	}
-	// Collywobbles
-	{
-		diseases[Diseases::kCollywobbles]->_name = UtilityAlch::ToString(Diseases::kCollywobbles);
-	}
-	// Droops
-	{
-		diseases[Diseases::kDroops]->_name = UtilityAlch::ToString(Diseases::kDroops);
-	}
-	// Greenspore
-	{
-		diseases[Diseases::kGreenspore]->_name = UtilityAlch::ToString(Diseases::kGreenspore);
-	}
-	// Helljoint
-	{
-		diseases[Diseases::kHelljoint]->_name = UtilityAlch::ToString(Diseases::kHelljoint);
-	}
-	// Red Rage
-	{
-		diseases[Diseases::kRedRage]->_name = UtilityAlch::ToString(Diseases::kRedRage);
-	}
-	// Rockjoint
-	{
-		diseases[Diseases::kRockjoint]->_name = UtilityAlch::ToString(Diseases::kRockjoint);
-	}
-	// Serpignious Dementia
-	{
-		diseases[Diseases::kSerpigniousDementia]->_name = UtilityAlch::ToString(Diseases::kSerpigniousDementia);
-	}
-	// Swamp Rot
-	{
-		diseases[Diseases::kSwampRot]->_name = UtilityAlch::ToString(Diseases::kSwampRot);
-	}
-	// Witches' Pox
-	{
-		diseases[Diseases::kWitchesPox]->_name = UtilityAlch::ToString(Diseases::kWitchesPox);
-	}
-	// Brown Rot
-	{
-		diseases[Diseases::kBrownRot]->_name = UtilityAlch::ToString(Diseases::kBrownRot);
-	}
-	// Chrondiasis 
-	{
-		diseases[Diseases::kChrondiasis]->_name = UtilityAlch::ToString(Diseases::kChrondiasis);
-	}
-	// Dampworm
-	{
-		diseases[Diseases::kDampworm]->_name = UtilityAlch::ToString(Diseases::kDampworm);
-	}
-	// Feeblelimb
-	{
-		diseases[Diseases::kFeeblelimb]->_name = UtilityAlch::ToString(Diseases::kFeeblelimb);
-	}
-	// Rattles
-	{
-		diseases[Diseases::kRattles]->_name = UtilityAlch::ToString(Diseases::kRattles);
-	}
-	// Rust Chancre
-	{
-		diseases[Diseases::kRustchancre]->_name = UtilityAlch::ToString(Diseases::kRustchancre);
-	}
-	// Shakes
-	{
-		diseases[Diseases::kShakes]->_name = UtilityAlch::ToString(Diseases::kShakes);
-	}
-	// Swamp Fever
-	{
-		diseases[Diseases::kSwampFever]->_name = UtilityAlch::ToString(Diseases::kSwampFever);
-	}
-	// Wither
-	{
-		diseases[Diseases::kWither]->_name = UtilityAlch::ToString(Diseases::kWither);
-	}
-	// Witless Pox
-	{
-		diseases[Diseases::kWitlessPox]->_name = UtilityAlch::ToString(Diseases::kWitlessPox);
-	}
-	// Yellow Tick
-	{
-		diseases[Diseases::kYellowTick]->_name = UtilityAlch::ToString(Diseases::kYellowTick);
-	}
-	// Bone Break Fever
-	{
-		diseases[Diseases::kBoneBreakFever]->_name = UtilityAlch::ToString(Diseases::kBoneBreakFever);
-	}
-	// Brain Fever
-	{
-		diseases[Diseases::kBrainFever]->_name = UtilityAlch::ToString(Diseases::kBrainFever);
-	}
-	// Typhoid Fever
-	{
-		diseases[Diseases::kTyphoidFever]->_name = UtilityAlch::ToString(Diseases::kTyphoidFever);
-	}
-	// Wizard Fever
-	{
-		diseases[Diseases::kWizardFever]->_name = UtilityAlch::ToString(Diseases::kWizardFever);
-	}
-	// Yellow Fever
-	{
-		diseases[Diseases::kYellowFever]->_name = UtilityAlch::ToString(Diseases::kYellowFever);
-	}
-	// Caliron's Curse
-	{
-		diseases[Diseases::kCalironsCurse]->_name = UtilityAlch::ToString(Diseases::kCalironsCurse);
-	}
-	// Chills
-	{
-		diseases[Diseases::kChills]->_name = UtilityAlch::ToString(Diseases::kChills);
-	}
-	// Red Death
-	{
-		diseases[Diseases::kRedDeath]->_name = UtilityAlch::ToString(Diseases::kRedDeath);
-	}
-	// Stomach Rot
-	{
-		diseases[Diseases::kStomachRot]->_name = UtilityAlch::ToString(Diseases::kStomachRot);
-	}
-	// Witbane
-	{
-		diseases[Diseases::kWitbane]->_name = UtilityAlch::ToString(Diseases::kWitbane);
-	}
-	// Wound Rot
-	{
-		diseases[Diseases::kWoundRot]->_name = UtilityAlch::ToString(Diseases::kWoundRot);
-	}
-	// Cholera
-	{
-		diseases[Diseases::kCholera]->_name = UtilityAlch::ToString(Diseases::kCholera);
-	}
-	// Leprosy
-	{
-		diseases[Diseases::kLeprosy]->_name = UtilityAlch::ToString(Diseases::kLeprosy);
-	}
-	// Plague
-	{
-		diseases[Diseases::kPlague]->_name = UtilityAlch::ToString(Diseases::kPlague);
+		cureOptionsShrine = std::make_shared<CureDiseaseOption>();
+		cureOptionsShrine->id = 0;
+		cureOptionsShrine->type = CureDiseaseOption::CureDiseaseType::Potion;
+		cureOptionsShrine->modifier = PermanentModifiers::kPotionOfCureBlight;
+		cureOptionsShrine->strengthfirst = 6;
+		cureOptionsShrine->strengthadditional = 3;
+
+		// get diseases with this modifier
+		for (int i = 0; i < Diseases::kMaxValue; i++) {
+			if (auto dis = GetDisease(static_cast<Diseases::Disease>(i)); dis) {
+				if (dis->_validModifiers & static_cast<EnumType>(cureOptionsShrine->modifier))
+					cureOptionsShrine->diseases.push_back(static_cast<Diseases::Disease>(i));
+			}
+		}
 	}
 }
 

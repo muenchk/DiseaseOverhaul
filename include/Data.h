@@ -8,6 +8,23 @@
 #include "Misc.h"
 #include "WeatherInfo.h"
 
+struct CureDiseaseOption
+{
+	enum class CureDiseaseType
+	{
+		Potion,
+		Spell,
+		Scroll
+	};
+
+	RE::FormID id;
+	CureDiseaseType type = CureDiseaseType::Potion;
+	PermanentModifiers::PermanentModifier modifier = PermanentModifiers::kNone;
+	float strengthfirst = 6;
+	float strengthadditional = 3;
+	std::vector<Diseases::Disease> diseases;
+};
+
 class Data
 {
 private:
@@ -85,6 +102,17 @@ public:
 	/// map that contains
 	/// </summary>
 	std::vector<Diseases::Disease> spreadingDiseaseMap[Spreading::kMaxValue];
+
+	std::shared_ptr<CureDiseaseOption> cureOptionsShrine;
+	/// <summary>
+	/// map thats contains objects that are related to curing diseases
+	/// </summary>
+	std::unordered_map<RE::FormID, CureDiseaseOption*> cureOptions;
+
+	/// <summary>
+	/// set that contains the reference ids of aedric shrines
+	/// </summary>
+	std::set<RE::FormID> shrines;
 
 	
 

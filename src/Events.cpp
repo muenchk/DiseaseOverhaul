@@ -374,10 +374,57 @@ TESDeathEventEnd:
 	/// <param name="a_event"></param>
 	/// <param name="a_eventSource"></param>
 	/// <returns></returns>
-	EventResult EventHandler::ProcessEvent(const RE::TESEquipEvent* /*a_event*/, RE::BSTEventSource<RE::TESEquipEvent>*)
+	EventResult EventHandler::ProcessEvent(const RE::TESEquipEvent* a_event, RE::BSTEventSource<RE::TESEquipEvent>*)
 	{
 		EvalProcessingEvent();
 		LOG_1("{}[Events] [EquipEvent]");
+
+		if (a_event && a_event->actor.get() && a_event->equipped && a_event->baseObject)
+		{
+			RE::Actor* ac = a_event->actor->As<RE::Actor>();
+			if (ac)
+			{
+				auto itr = Main::data->cureOptions.find(a_event->baseObject);
+				if (itr != Main::data->cureOptions.end())
+				{
+					auto acinfo = Main::data->FindActorExisting(ac);
+					if (acinfo->IsValid()) {
+						for (auto dis : itr->second->diseases) {
+							if (acinfo->IsInfected(dis))
+							{
+								acinfo->ApplyDiseaseModifier(dis, itr->second);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return EventResult::kContinue;
+	}
+
+	EventResult EventHandler::ProcessEvent(const RE::TESActivateEvent* a_event, RE::BSTEventSource<RE::TESActivateEvent>*)
+	{
+		EvalProcessingEvent();
+		if (a_event && a_event->actionRef.get() && a_event->objectActivated.get()) {
+			RE::Actor* ac = a_event->actionRef->As<RE::Actor>();
+			if (ac) {
+				LOG_1("{}[Events] [TESActivateEvent]");
+				if (Main::data->cureOptionsShrine) {
+					if (Main::data->shrines.contains(a_event->objectActivated->GetFormID()) ||
+						a_event->objectActivated->GetBaseObject() && Main::data->shrines.contains(a_event->objectActivated->GetBaseObject()->GetFormID())) {
+						auto acinfo = Main::data->FindActorExisting(ac);
+						if (acinfo->IsValid()) {
+							for (auto dis : Main::data->cureOptionsShrine->diseases) {
+								if (acinfo->IsInfected(dis)) {
+									acinfo->ApplyDiseaseModifier(dis, Main::data->cureOptionsShrine.get());
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 
 		return EventResult::kContinue;
 	}
@@ -702,6 +749,8 @@ TESDeathEventEnd:
 		LOG1_1("{}Registered {}", typeid(RE::TESDeathEvent).name());
 		scriptEventSourceHolder->GetEventSource<RE::TESCellAttachDetachEvent>()->AddEventSink(EventHandler::GetSingleton());
 		LOG1_1("{}Registered {}", typeid(RE::TESCellAttachDetachEvent).name());
+		scriptEventSourceHolder->GetEventSource<RE::TESActivateEvent>()->AddEventSink(EventHandler::GetSingleton());
+		LOG1_1("{}Registered {}", typeid(RE::TESActivateEvent).name());
 		RE::TESHarvestedEvent::GetEventSource()->AddEventSink(EventHandler::GetSingleton());
 		LOG1_1("{}Registered {}", typeid(RE::TESHarvestedEvent::ItemHarvested).name());
 		RE::BSInputDeviceManager::GetSingleton()->AddEventSink(EventHandler::GetSingleton());

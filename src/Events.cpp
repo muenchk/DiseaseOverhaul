@@ -79,8 +79,8 @@ namespace Events
 
 	EventResult EventHandler::ProcessEvent(const RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_eventSource)
 	{
-		LOG_1("{}[Events] [BSAnimationGraphEvent]");
 		if (a_event && a_event->holder) {
+			LOG1_1("{}[Events] [BSAnimationGraphEvent] {}", a_event->tag);
 			bool actionPhysical = false;
 			bool actionMagical = false;
 			bool actionVoice = false;
@@ -151,7 +151,6 @@ namespace Events
 	EventResult EventHandler::ProcessEvent(const RE::TESHitEvent* a_event, RE::BSTEventSource<RE::TESHitEvent>*)
 	{
 		EvalProcessingEvent();
-		LOG_1("{}[Events] [TESHitEvent]");
 		// if hit is blocked, skip
 		if (a_event->flags & RE::TESHitEvent::Flag::kHitBlocked)
 			return EventResult::kContinue;
@@ -163,6 +162,7 @@ namespace Events
 		if (a_event->target.get() != nullptr && a_event->cause.get() != nullptr) {
 			if (RE::Actor* target = a_event->target->As<RE::Actor>(); target != nullptr) {
 				if (RE::Actor* aggressor = a_event->cause->As<RE::Actor>(); aggressor != nullptr) {
+					LOG_1("{}[Events] [TESHitEvent]");
 					auto actar = Main::data->FindActor(target);
 					// if less than interval has passed since the last hitevent on the actor return
 					if (currtime - actar->GetHitCooldown() < Time100Millis)
@@ -311,7 +311,7 @@ namespace Events
 						}
 						break;
 					}
-
+					/*
 					if (hit != HitType::kNone) {
 						if (acagg->ProgressAllDiseases() && Settings::Disease::_AllowActorDeath) {
 							logusage("[Events] [HandleActors] Actor {} has died from their disease", Utility::PrintFormNonDebug(acagg));
@@ -321,7 +321,7 @@ namespace Events
 							logusage("[Events] [HandleActors] Actor {} has died from their disease", Utility::PrintFormNonDebug(actar));
 							actar->Kill();
 						}
-					}
+					}*/
 				}
 			}
 		}

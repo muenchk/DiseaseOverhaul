@@ -1,4 +1,5 @@
 #include "ActorInfo.h"
+#include "Hooks.h"
 #include "Settings.h"
 #include "UtilityAlch.h"
 #include "Distribution.h"
@@ -51,7 +52,7 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 	if (value == Diseases::Disease::kSanguinareVampirism && (!IsPlayer() || _vampire))
 		return false;
 
-	LOG3_3("{}[ActorInfo] [ProgressDisease] actor: {},disease: {}, points: {}", _formstring, UtilityAlch::ToString(value), points);
+	LOG3_3("{}[ActorInfo] [ProgressDisease] actor: {}, disease: {}, points: {}", _formstring, UtilityAlch::ToString(value), points);
 
 	// stat tracking
 	Stats::DiseaseStats_ProgressDisease++;
@@ -87,14 +88,14 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 	if (dinfo->immuneUntil > currentgameday)
 		return false;
 
-	LOG_4("{}[ActorInfo] [ProgressDisease] start work");
-
 	// do actual work
 	std::shared_ptr<Disease> dis = data->GetDisease(value);
+	float initpoints = points;
 	dinfo->advPoints += points;
 	switch (dinfo->status) {
 	case DiseaseStatus::kInfection:
 		LOG_4("{}[ActorInfo] [ProgressDisease] Infection");
+		LOG2_4("{}[ActorInfo] [ProgressDisease] stage: {}, initial points: {}", dis->_stageInfection->_specifier, initpoints);
 		// infection stage means no effects
 		// we have to check whether we jump out of infection stage and calculate effects
 		if (dinfo->advPoints > dis->_stageInfection->_advancementThreshold) {
@@ -112,6 +113,8 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 			// apply effect if there is one
 			if (dis->_stages[0]->effect != nullptr)
 				AddSpell(dis->_stages[dinfo->stage]->effect);
+			if (dis->permeffect != nullptr)
+				AddSpell(dis->permeffect);
 			//acinfo->CastSpell(false, 0, dis->_stages[0]->effect);
 			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[0]->effect, true, actor, 100, false, false, actor);
 		} else if (dinfo->advPoints <= 0) {
@@ -123,6 +126,7 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 		break;
 	case DiseaseStatus::kProgressing:
 		LOG_4("{}[ActorInfo] [ProgressDisease] Progressing");
+		LOG2_4("{}[ActorInfo] [ProgressDisease] stage: {}, initial points: {}", dis->_stages[dinfo->stage]->_specifier, initpoints);
 		// this is more tricky, first check current stage and then advancement
 		if (dinfo->advPoints > dis->_stages[dinfo->stage]->_advancementThreshold) {
 			// try advance stage
@@ -226,6 +230,7 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 		break;
 	case DiseaseStatus::kRegressing:
 		LOG_4("{}[ActorInfo] [ProgressDisease] Regressing");
+		LOG2_4("{}[ActorInfo] [ProgressDisease] stage: {}, initial points: {}", dis->_stages[dinfo->stage]->_specifier, initpoints);
 		// if you are regressing you cannot progress anymore, even if you were to gain advPoints
 		if (dinfo->advPoints < 0) {
 			// we had a regressing effect so go down stages
@@ -240,6 +245,8 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 				// remove effect
 				if (dis->_stages[dinfo->stage]->effect != nullptr)
 					RemoveSpell(dis->_stages[dinfo->stage]->effect);
+				if (dis->permeffect != nullptr)
+					RemoveSpell(dis->permeffect);
 				//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect);
 				//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 			} else {
@@ -269,6 +276,7 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 		{
 			// if we have reached the maximum stage turn the actor into a vampire
 
+
 			//If Game.GetPlayer().GetCombatState() == 0 && Game.IsMovementControlsEnabled() && Game.IsFightingControlsEnabled() VampireSleepMessage.Show();
 			//Debug.Trace(self + "Player not in combat, and controls are enabled. Trigger Vampire change")
 			//	PlayerVampireQuest.VampireChange(Game.GetPlayer())
@@ -284,20 +292,22 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 					auto args = RE::MakeFunctionArguments(GetActor());
 					ScriptCallbackPtr nullCallback;
 					Papyrus::VM->DispatchMethodCall(scriptobj, "VampireChange"sv, args, nullCallback);
+					// also remove the fourth stage effects from actor
+					RemoveSpell(dis->_stages[dinfo->stage]->effect);
 					DeleteDisease(Diseases::Disease::kSanguinareVampirism);
 
 					// get vampire message
 					RE::BGSMessage* vampsleepmes = RE::TESForm::LookupByID<RE::BGSMessage>(0x0ED0AB);
 					if (vampsleepmes) {
-						auto vsmscr = ScriptObject::FromForm(vampsleepmes, "Message");
-						auto argus = RE::MakeFunctionArguments(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
-
-						bool result = Papyrus::VM->DispatchMethodCall(vsmscr, "Show"sv, argus, nullCallback);
-						LOG1_4("{}[ActorInfo] [ProgressDisease] Dispatched Message call: {}", result);
+						RE::BSString str;
+						vampsleepmes->GetDescription(str, nullptr);
+						Hooks::ShowHUDMessageHook::ShowHUDMessage(str.c_str());
 					}
 
 					// dispel sanguinare vampirism script effect
 					DispelEffect(RE::TESForm::LookupByID<RE::SpellItem>(0xB8780));
+					if (dis->permeffect != nullptr)
+						RemoveSpell(dis->permeffect);
 
 					// update npc vampire status
 					_vampire = true;
@@ -305,6 +315,13 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 			}
 		}
 	}
+	LOG2_4("{}[ActorInfo] [ProgressDisease] stage: {}, end points: {}", dis->_stages[dinfo->stage]->_specifier, dinfo->advPoints);
+
+
+
+
+
+
 
 	CalcDiseaseFlags();
 	LOG_4("{}[ActorInfo] [ProgressDisease] end");
@@ -420,9 +437,8 @@ bool ActorInfo::ForceIncreaseStage(Diseases::Disease value)
 			// apply effect if there is one
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
 				AddSpell(dis->_stages[dinfo->stage]->effect);
-				//CastSpell(false, 0, dis->_stages[dinfo->stage]->effect);
-			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->CastSpellImmediate(dis->_stages[dinfo->stage]->effect, true, actor, 100, false, false, actor);
-			//actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant)->SpellCast(false, 0, dis->_stages[dinfo->stage]->effect);
+			if (dis->permeffect != nullptr)
+				AddSpell(dis->permeffect);
 			else
 				LOG_4("{}[ActorInfo] [ForceIncreaseStage] the stage does not have any effect");
 		}
@@ -480,6 +496,8 @@ void ActorInfo::ForceDecreaseStage(Diseases::Disease value)
 			// remove effect
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
 				RemoveSpell(dis->_stages[dinfo->stage]->effect);
+			if (dis->permeffect != nullptr)
+				RemoveSpell(dis->permeffect);
 			//acinfo->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 		} else {
 			LOG_4("{}[ActorInfo] [ForceDecreaseStage] devance");

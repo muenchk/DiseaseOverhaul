@@ -125,7 +125,7 @@ namespace Events
 					// updates currently performed physical actions
 					actors[x]->UpdatePerformingPhysicalAction();
 					actors[x]->SetDiseaseTicks((int)((currentgameday - actors[x]->GetDiseaseLastTime()) / Settings::System::_ticklength));
-					LOG4_1("{}[Events] [HandleActors] time: {}\tlast: {}\tticklength: {}\tticks: {}", currentgameday, actors[x]->GetDiseaseLastTime(), Settings::System::_ticklength, actors[x]->GetDiseaseTicks());
+					//LOG4_1("{}[Events] [HandleActors] time: {}\tlast: {}\tticklength: {}\tticks: {}", currentgameday, actors[x]->GetDiseaseLastTime(), Settings::System::_ticklength, actors[x]->GetDiseaseTicks());
 					if (actors[x]->GetDiseaseTicks() > 0)
 						actors[x]->SetDiseaseLastTime(currentgameday);
 				}
@@ -171,7 +171,7 @@ namespace Events
 					//std::unordered_map<uint64_t /*actormashup*/, float /*distance*/> distances = UtilityAlch::GetActorDistancesMap(allinfected, actors, Settings::Disease::_particleRange);
 					auto list = UtilityAlch::GetActorDistancesList(allinfected, actorsreduced, Settings::Disease::_particleRange);
 					//LOG1_1("{}[Events] [HandleActors] calculate particle effects for {} pairs", distances.size());
-					LOG1_1("{}[Events] [HandleActors] calculate particle effects for {} pairs", list.size());
+					//LOG1_1("{}[Events] [HandleActors] calculate particle effects for {} pairs", list.size());
 
 					// iterate over illnesses
 					for (auto disval : disvals) {
@@ -293,7 +293,7 @@ namespace Events
 							if (itr != cellmates.end()) {
 								auto& vec = itr->second;
 								float scale = 0;
-								LOG1_1("{}[Events] [HandleEvents] Handling stage: {}", infected[disval][c]->FindDisease(disval)->stage);
+								//LOG1_1("{}[Events] [HandleEvents] Handling stage: {}", infected[disval][c]->FindDisease(disval)->stage);
 								// get disease stage of infected
 								stage = dis->_stages[infected[disval][c]->FindDisease(disval)->stage];
 								// get scaling from infectivity

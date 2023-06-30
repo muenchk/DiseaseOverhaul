@@ -423,6 +423,11 @@ public:
 	EnumType endevents = DiseaseEndEvents::kNone;
 
 	/// <summary>
+	/// effect that is permanently applied from the beginning of progression to the end of regression
+	/// </summary>
+	RE::SpellItem* permeffect = nullptr;
+
+	/// <summary>
 	/// returns [true] if the disease can spread via particles, [false] otherwise
 	/// </summary>
 	/// <returns></returns>

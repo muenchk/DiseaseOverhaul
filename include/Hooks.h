@@ -10,7 +10,7 @@ namespace Hooks
 	public:
 		static void InstallHook()
 		{
-			REL::Relocation<uintptr_t> target{ REL::VariantID(14497, 14655, 0), REL::VariantOffset(0, 0, 0) };
+			REL::Relocation<uintptr_t> target{ REL::VariantID(14497, 14655, 0), REL::VariantOffset(0, 0, 0) }; // needs vr resolution
 			auto& trampoline = SKSE::GetTrampoline();
 
 			_GetName = trampoline.write_branch<5>(target.address(), GetName);
@@ -45,7 +45,7 @@ namespace Hooks
 		static void Install()
 		{
 			auto& trampoline = SKSE::GetTrampoline();
-			REL::Relocation<uintptr_t> hook1{ REL::RelocationID{ 36972, 37997 }, REL::VariantOffset{ 0x0, 0x0, 0 } };
+			REL::Relocation<uintptr_t> hook1{ REL::RelocationID{ 36972, 37997 }, REL::VariantOffset{ 0x0, 0x0, 0 } }; // needs vr resolution
 
 			struct Patch : Xbyak::CodeGenerator
 			{
@@ -77,6 +77,19 @@ namespace Hooks
 		static void AnimationEvent(RE::BSAnimationGraphEvent& a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* src);
 
 		static inline REL::Relocation<uintptr_t> _GoFurther;
+	};
+
+	class ShowHUDMessageHook
+	{
+	private:
+		static void ShowHUDMessageDecl(const char* message, uint64_t arg_2, bool arg_3);
+
+	public:
+		static void ShowHUDMessage(const char* message)
+		{
+			REL::Relocation<decltype(ShowHUDMessageDecl)> func{ REL::RelocationID{ 52050, 52933 } };
+			return func(message, 0, false);
+		}
 	};
 
 	void InstallHooks();

@@ -2466,9 +2466,9 @@ std::tuple<std::shared_ptr<DiseaseStage>, uint16_t> LoadDiseaseStage(std::vector
 std::tuple<std::shared_ptr<Disease>, uint16_t, uint16_t, std::vector<uint16_t>> LoadDisease(std::vector<std::string>* splits, std::string file, std::string tmp)
 {
 	int splitindex = 0; 
-	if (splits->size() < 18) // if there are too few stages
+	if (splits->size() < 20) // if there are too few stages
 	{
-		logger::warn("[Settings] [LoadDisease] Not a rule. Expected {} fields, found {}. file: {}, rule:\"{}\"", 18, splits->size(), file, tmp);
+		logger::warn("[Settings] [LoadDisease] Not a rule. Expected {} fields, found {}. file: {}, rule:\"{}\"", 20, splits->size(), file, tmp);
 		return {};
 	}
 
@@ -2623,6 +2623,32 @@ std::tuple<std::shared_ptr<Disease>, uint16_t, uint16_t, std::vector<uint16_t>> 
 
 	// get endeffect
 	dis->endeffect = Data::GetSingleton()->FindSpell(endeffect, pluginname);
+
+	
+	// get permformid
+	RE::FormID permeffect;
+	if (splits->at(splitindex) == "") {
+		permeffect = 0;
+		splitindex++;
+	} else
+		try {
+			permeffect = std::stoul(splits->at(splitindex), nullptr, 16);
+			splitindex++;
+		} catch (std::out_of_range&) {
+			logwarn("[Settings] [LoadDisease] out-of-range expection in field \"PermanentEffect\". file: {}, rule:\"{}\"", file, tmp);
+			return {};
+		} catch (std::invalid_argument&) {
+			logwarn("[Settings] [LoadDisease] invalid-argument expection in field \"PermanentEffect\". file: {}, rule:\"{}\"", file, tmp);
+			return {};
+		}
+	// get permplugin name
+	std::string permpluginname = splits->at(splitindex);
+	splitindex++;
+	if (Utility::ToLower(permpluginname) == "settings")
+		permpluginname = Settings::PluginName;
+
+	// get PermanentEffect
+	dis->permeffect = Data::GetSingleton()->FindSpell(permeffect, permpluginname);
 
 	// get stageinfection
 	uint16_t infectionid;

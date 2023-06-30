@@ -1323,7 +1323,7 @@ void Data::PatchGameObjects()
 {
 	// Patch Sanguinare Vampirism to use the new magic effect instead of the old one
 	{
-		RE::EffectSetting* effect = Utility::GetTESForm<RE::EffectSetting>(datahandler, 0x0E34, Settings::PluginName);
+		RE::EffectSetting* effect = Utility::GetTESForm<RE::EffectSetting>(datahandler, 0x0899, Settings::PluginName);
 		if (effect)
 		{
 			RE::SpellItem* sanvam = RE::TESForm::LookupByID<RE::SpellItem>(0xB8780);

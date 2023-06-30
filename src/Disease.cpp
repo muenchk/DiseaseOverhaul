@@ -281,6 +281,15 @@ void Disease::CalcFlags()
 		if (_stages[i]->_spreading[Spreading::kActionMagical].first != 0)
 			flags = flags | DiseaseFlags::kActionMagical;
 	}
+	// check in action magical
+	if (_stageInfection->_spreading[Spreading::kActionVoice].first != 0) {
+		spreadflags = spreadflags | DiseaseFlags::kActionVoice;
+		flags = flags | DiseaseFlags::kActionVoice;
+	}
+	for (int i = 0; i < _numstages; i++) {
+		if (_stages[i]->_spreading[Spreading::kActionVoice].first != 0)
+			flags = flags | DiseaseFlags::kActionVoice;
+	}
 	// check in on hit melee
 	if (_stageInfection->_spreading[Spreading::kOnHitMelee].first != 0) {
 		spreadflags = spreadflags | DiseaseFlags::kOnHitMelee;

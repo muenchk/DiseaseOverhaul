@@ -1,4 +1,5 @@
 #include "ActorInfo.h"
+#include "Events.h"
 #include "Settings.h"
 #include "UtilityAlch.h"
 #include "Distribution.h"
@@ -10,6 +11,7 @@ void ActorInfo::Init()
 {
 	playerRef = RE::PlayerCharacter::GetSingleton();
 	data = Data::GetSingleton();
+	events = Events::EventHandler::GetSingleton();
 }
 
 ActorInfo::ActorInfo(RE::Actor* _actor)
@@ -55,6 +57,7 @@ ActorInfo::ActorInfo(RE::Actor* _actor)
 		valid = true;
 		timestamp_invalid = 0;
 		dead = false;
+		_actor->AddAnimationGraphEventSink(events);
 	}
 }
 
@@ -66,6 +69,8 @@ void ActorInfo::Reset(RE::Actor* _actor)
 		return;
 	}
 	aclock;
+	if (RE::Actor* ac = actor.get().get(); ac)
+		ac->RemoveAnimationGraphEventSink(events);
 	actor = _actor->GetHandle();
 	citems.Reset();
 	formid = ID();
@@ -119,6 +124,7 @@ void ActorInfo::Reset(RE::Actor* _actor)
 		valid = true;
 		timestamp_invalid = 0;
 		dead = false;
+		_actor->AddAnimationGraphEventSink(events);
 	}
 }
 

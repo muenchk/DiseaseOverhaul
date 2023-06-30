@@ -577,6 +577,32 @@ void ActorInfo::ApplyDiseaseModifier(Diseases::Disease disease, CureDiseaseOptio
 	}
 }
 
+void ActorInfo::UpdatePerformingPhysicalAction()
+{
+	aclock;
+	if (!valid || dead)
+		return;
 
+	if (RE::Actor* ac = actor.get().get(); ac)
+	{
+		physicalactions = 0;
+		if (ac->AsActorState()->IsSneaking())
+			physicalactions++;
+		if (ac->AsActorState()->IsSprinting())
+			physicalactions++;
+		if (ac->AsActorState()->actorState1.swimming)
+			physicalactions++;
+		if (ac->AsActorState()->GetAttackState() == RE::ATTACK_STATE_ENUM::kBowDrawn)
+			physicalactions++;
+	}
+}
+
+int ActorInfo::GetPhysicalActions()
+{
+	aclock;
+	if (!valid || dead)
+		return 0;
+	return physicalactions;
+}
 
 #pragma endregion

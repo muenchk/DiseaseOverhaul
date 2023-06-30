@@ -398,7 +398,8 @@ namespace Events
 		public RE::BSTEventSink<RE::TESFormDeleteEvent>,
 		public RE::BSTEventSink<RE::TESContainerChangedEvent>,
 		public RE::BSTEventSink<RE::BGSActorCellEvent>,
-		public RE::BSTEventSink<RE::TESActivateEvent>
+		public RE::BSTEventSink<RE::TESActivateEvent>,
+		public RE::BSTEventSink<RE::BSAnimationGraphEvent>
 	{
 	public:
 		/// <summary>
@@ -452,6 +453,13 @@ namespace Events
 		virtual EventResult ProcessEvent(RE::InputEvent* const* a_event, RE::BSTEventSource<RE::InputEvent*>* a_eventSource) override;
 
 		
+		/// <summary>
+		/// EventHandler for animation events
+		/// </summary>
+		/// <param name="a_event"></param>
+		/// <param name="a_eventSource"></param>
+		/// <returns></returns>
+		virtual EventResult ProcessEvent(const RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_eventSource) override;
 		/// <summary>
 		/// EventHandler for objects being activated
 		/// </summary>

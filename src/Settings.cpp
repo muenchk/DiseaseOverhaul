@@ -2223,9 +2223,9 @@ void Settings::LoadDistrConfigNUP()
 std::tuple<std::shared_ptr<DiseaseStage>, uint16_t> LoadDiseaseStage(std::vector<std::string>* splits, std::string file, std::string tmp)
 {
 	int splitindex = 0;
-	if (splits->size() < 69)  // if there are too few stages
+	if (splits->size() < 70)  // if there are too few stages
 	{
-		logger::warn("[Settings] [LoadDiseaseStage] Not a rule. Expected {} fields, found {}. file: {}, rule:\"{}\"", 69, splits->size(), file, tmp);
+		logger::warn("[Settings] [LoadDiseaseStage] Not a rule. Expected {} fields, found {}. file: {}, rule:\"{}\"", 70, splits->size(), file, tmp);
 		return {};
 	}
 
@@ -2457,6 +2457,8 @@ std::tuple<std::shared_ptr<DiseaseStage>, uint16_t> LoadDiseaseStage(std::vector
 	stg->_spreading[Spreading::kActionPhysical] = std::pair<float, float>{ 100.0f, ParsePoints() };
 	// kActionMagical
 	stg->_spreading[Spreading::kActionMagical] = std::pair<float, float>{ 100.0f, ParsePoints() };
+	// kActionMagical
+	stg->_spreading[Spreading::kActionVoice] = std::pair<float, float>{ 100.0f, ParsePoints() };
 
 	return { stg, stageid };
 }

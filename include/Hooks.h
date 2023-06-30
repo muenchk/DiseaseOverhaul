@@ -21,6 +21,64 @@ namespace Hooks
 		static inline REL::Relocation<decltype(GetName)> _GetName;
 	};
 
+	/* class AnimationEventHook
+	{
+	public:
+		static void InstallHook()
+		{
+			REL::Relocation<uintptr_t> target{ REL::VariantID(36972, 37997, 0), REL::VariantOffset(0x22, 0x22, 0) };
+			auto& trampoline = SKSE::GetTrampoline();
+
+			_AnimationEvent = trampoline.write_branch<5>(target.address(), AnimationEvent);
+		}
+
+	private:
+		static uintptr_t AnimationEvent(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4);
+		static inline REL::Relocation<decltype(AnimationEvent)> _AnimationEvent;
+	};*/
+
+	class AnimationEventHook
+	{
+	public:
+		static inline uintptr_t remainder;
+
+		static void Install()
+		{
+			auto& trampoline = SKSE::GetTrampoline();
+			REL::Relocation<uintptr_t> hook1{ REL::RelocationID{ 36972, 37997 }, REL::VariantOffset{ 0x0, 0x0, 0 } };
+
+			struct Patch : Xbyak::CodeGenerator
+			{
+				Patch(uintptr_t a_func, uintptr_t a_hook)
+				{
+					Xbyak::Label fdec;
+
+					push(rdi);
+					sub(rsp, 0x60);
+					call(ptr[rip + fdec]);
+					mov(rax, qword[a_func]);
+					jmp(rax);
+
+					L(fdec);
+					dq(a_hook);
+				}
+			};
+
+			Patch patch{ (uintptr_t)(&remainder), reinterpret_cast<uintptr_t>(AnimationEvent) };
+			patch.ready();
+
+			remainder = trampoline.write_branch<5>(hook1.address(), trampoline.allocate(patch));
+			remainder = hook1.address() + 0x6;
+
+			REL::safe_fill(hook1.address() + 0x5, REL::NOP, 1);
+		}
+
+	private:
+		static void AnimationEvent(RE::BSAnimationGraphEvent& a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* src);
+
+		static inline REL::Relocation<uintptr_t> _GoFurther;
+	};
+
 	void InstallHooks();
 }
 

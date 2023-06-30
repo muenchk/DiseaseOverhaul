@@ -426,7 +426,7 @@ std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> UtilityAlch
 						if (cell->GetFormID() == cell2->GetFormID()) {
 							//distance = sqrtf(actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
 							distance = (actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
-							LOG3_5("{}calc, {}, {}, {}", Utility::PrintForm(actors1[i]), Utility::PrintForm(actors2[c]), distance);
+							//LOG3_5("{}calc, {}, {}, {}", Utility::PrintForm(actors1[i]), Utility::PrintForm(actors2[c]), distance);
 						}
 						// if its not the same set ifinity
 						else {

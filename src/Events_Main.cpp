@@ -122,6 +122,8 @@ namespace Events
 				// calculate ticks for each actor and set current time as last change
 #pragma omp parallel for num_threads(4) shared(currentgameday) schedule(runtime)
 				for (int x = 0; x < actors.size(); x++) {
+					// updates currently performed physical actions
+					actors[x]->UpdatePerformingPhysicalAction();
 					actors[x]->SetDiseaseTicks((int)((currentgameday - actors[x]->GetDiseaseLastTime()) / Settings::System::_ticklength));
 					LOG4_1("{}[Events] [HandleActors] time: {}\tlast: {}\tticklength: {}\tticks: {}", currentgameday, actors[x]->GetDiseaseLastTime(), Settings::System::_ticklength, actors[x]->GetDiseaseTicks());
 					if (actors[x]->GetDiseaseTicks() > 0)
@@ -173,13 +175,13 @@ namespace Events
 
 					// iterate over illnesses
 					for (auto disval : disvals) {
-						LOG1_1("{}[Events] [HandleEvents] Handling Particle disease: {}", UtilityAlch::ToString(disval));
+						//LOG1_1("{}[Events] [HandleEvents] Handling Particle disease: {}", UtilityAlch::ToString(disval));
 						// get disease
 						std::shared_ptr<Disease> dis = data->GetDisease(disval);
 						if (!dis)
 							continue;
 						if (dis->ParticleSpread() == false) {
-							LOG1_1("{}[Events] [HandleEvents] Disease does not spread via particles: {}", UtilityAlch::ToString(disval));
+							//LOG1_1("{}[Events] [HandleEvents] Disease does not spread via particles: {}", UtilityAlch::ToString(disval));
 							continue;  // disease does not spread via particles
 						}
 						std::shared_ptr<DiseaseStage> stage = nullptr;
@@ -206,7 +208,7 @@ namespace Events
 								continue;
 							}
 							//LOG2_1("{}tried to access index: {} and {}", iter->first >> 32, (uint32_t)(iter->first));
-							LOG2_1("{}tried to access index: {} and {}", first >> 32, (uint32_t)(first));
+							//LOG2_1("{}tried to access index: {} and {}", first >> 32, (uint32_t)(first));
 							//idx2 = (uint32_t)iter->first;
 							idx2 = (uint32_t)first;
 							act = actorsreduced[idx2];
@@ -276,7 +278,7 @@ namespace Events
 
 					// iterate over illnesses
 					for (auto disval : disvals) {
-						LOG1_1("{}[Events] [HandleEvents] Handling Air disease: {}", UtilityAlch::ToString(disval));
+						//LOG1_1("{}[Events] [HandleEvents] Handling Air disease: {}", UtilityAlch::ToString(disval));
 						// get disease
 						std::shared_ptr<Disease> dis = data->GetDisease(disval);
 						if (!dis)
@@ -336,7 +338,7 @@ namespace Events
 				// calculate static cell and weather effects
 				// also calculate regular disease advancement while we are at it
 				for (int i = 0; i < Diseases::kMaxValue; i++) {
-					LOG1_1("{}[Events] [HandleEvents] Handling Static disease: {}", UtilityAlch::ToString(static_cast<Diseases::Disease>(i)));
+					//LOG1_1("{}[Events] [HandleEvents] Handling Static disease: {}", UtilityAlch::ToString(static_cast<Diseases::Disease>(i)));
 					// get disease
 					Diseases::Disease disval = static_cast<Diseases::Disease>(i);
 					std::shared_ptr<Disease> dis = data->GetDisease(disval);
@@ -348,7 +350,7 @@ namespace Events
 					// iterate actorsreduced
 #pragma omp parallel for private(stage) num_threads(4) schedule(runtime) shared(disval, dis, actorsreduced)
 					for (int x = 0; x < actorsreduced.size(); x++) {
-						LOG1_1("{}[Events] [HandleActors] actor: {}", actorsreduced[x]->GetName());
+						//LOG1_1("{}[Events] [HandleActors] actor: {}", actorsreduced[x]->GetName());
 						auto dinfo = actorsreduced[x]->FindDisease(disval);
 						if (!dinfo)
 							stage = dis->_stageInfection;
@@ -359,7 +361,7 @@ namespace Events
 						scale = scale * (1 - actorsreduced[x]->IgnoresDisease());
 						int ticks = actorsreduced[x]->GetDiseaseTicks();
 						float points = 0;
-						LOG2_1("{}[Events] [HandleActors] base, ticks: {}, scale: {}", ticks, scale);
+						//LOG2_1("{}[Events] [HandleActors] base, ticks: {}, scale: {}", ticks, scale);
 						if (scale > 0.0f) {
 							//LOG1_1("{}[Events] [HandleActors] base, ticks: {}", ticks[x]);
 							// iterate ticks
@@ -504,12 +506,16 @@ namespace Events
 									points += ((float)std::get<0>(stage->_spreading[Spreading::kExtremeConditions]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kInSwamp]) * ticks;
 								}
 							}
+
+							if (stage->_spreading[Spreading::kActionPhysical].second > 0)
+								points += scale * stage->_spreading[Spreading::kActionPhysical].second * actorsreduced[x]->GetPhysicalActions();
 						}
 
 						// handle static progression effects
 						if (dinfo && dinfo->status == DiseaseStatus::kProgressing) {
-							points += (1 - actors[x]->IgnoresDisease()) * dis->_baseProgressionPoints * ticks;
+							points += scale * dis->_baseProgressionPoints * ticks;
 						}
+						// handle static regression effects
 						if (dinfo && dinfo->permanentModifiersPoints != 0)
 							points += dinfo->permanentModifiersPoints * ticks;
 						actorsreduced[x]->AddDiseasePoints(disval, points);

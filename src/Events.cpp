@@ -77,6 +77,71 @@ namespace Events
 
 #define Time100Millis 1000000
 
+	EventResult EventHandler::ProcessEvent(const RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_eventSource)
+	{
+		LOG_1("{}[Events] [BSAnimationGraphEvent]");
+		if (a_event && a_event->holder) {
+			bool actionPhysical = false;
+			bool actionMagical = false;
+			bool actionVoice = false;
+			float scale = 1;
+
+			if (a_event->tag == "weaponSwing" || a_event->tag == "weaponLeftSwing") {
+				actionPhysical = true;
+			} else if (a_event->tag == "blockStartOut") {
+			} else if (a_event->tag == "PowerAttackStop") {
+				// power attacks also fire "weaponSwing" so only add a little bit as penalty and not the full powerattack value
+				actionPhysical = true;
+				scale = 0.5;
+			} else if (a_event->tag == "JumpUp") {
+				actionPhysical = true;
+			} else if (a_event->tag == "bowDraw") {
+				actionPhysical = true;
+			} else if (a_event->tag == "BeginCastVoice") {
+				actionVoice = true;
+			} else if (a_event->tag == "MRh_SpellFire_Event" || a_event->tag == "MLh_SpellFire_Event") {
+				actionMagical = true;
+			}
+
+			// if we don't have anything to do, no need to look up the npc
+			if (actionPhysical || actionMagical || actionVoice) {
+				if (std::shared_ptr<ActorInfo> acinfo = Main::data->FindActorExisting(a_event->holder->As<RE::Actor>()); acinfo && acinfo->IsValid()) {
+					for (int i = 0; i < Diseases::kMaxValue; i++) {
+						Diseases::Disease disval = static_cast<Diseases::Disease>(i);
+						std::shared_ptr<Disease> dis = Main::data->GetDisease(disval);
+						if (!dis) {
+							//LOG_1("{}[Events] [HandleActors] skip disease");
+							continue;
+						}
+						std::shared_ptr<DiseaseStage> stage = nullptr;
+						auto dinfo = acinfo->FindDisease(disval);
+						if (!dinfo)
+							stage = dis->_stageInfection;
+						else
+							stage = dis->_stages[dinfo->stage];
+						float scale = 1;
+						scale = scale * (1 - acinfo->IgnoresDisease());
+
+						if (scale != 0) {
+							if (actionPhysical) {
+								if (stage->_spreading[Spreading::kActionPhysical].second > 0)
+									acinfo->AddDiseasePoints(disval, scale * stage->_spreading[Spreading::kActionPhysical].second);
+							} else if (actionMagical) {
+								if (stage->_spreading[Spreading::kActionMagical].second > 0)
+									acinfo->AddDiseasePoints(disval, scale * stage->_spreading[Spreading::kActionMagical].second);
+							} else if (actionVoice) {
+								if (stage->_spreading[Spreading::kActionVoice].second > 0)
+									acinfo->AddDiseasePoints(disval, scale * stage->_spreading[Spreading::kActionVoice].second);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return EventResult::kContinue;
+	}
+
 	/// <summary>
 	/// Processes TESHitEvents
 	/// </summary>
@@ -652,7 +717,7 @@ TESDeathEventEnd:
 						console->Print((std::string("Werewolf: \t\t") + std::to_string(acinfo->IsWerewolf())).c_str());
 						console->Print((std::string("Printing disease information: \t")).c_str());
 						for (auto dis : acinfo->diseases) {
-							if (dis != nullptr) {
+							if (dis) {
 								console->Print((std::string("\tDisease:\t\t\t") + Main::data->GetDisease(dis->disease)->GetName()).c_str());
 								console->Print((std::string("\t\tstatus:\t\t") + UtilityAlch::ToString(dis->status)).c_str());
 								console->Print((std::string("\t\tstage:\t\t") + std::to_string(dis->stage)).c_str());

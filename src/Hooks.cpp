@@ -15,6 +15,7 @@ namespace Hooks
 		//GetNameHook::InstallHook();
 		if (Settings::Infection::_ShowInfectionStatus)
 			PowerOfThree::Install();
+		//AnimationEventHook::Install();
 	}
 
 	RE::BSFixedString GetNameHook::GetName(RE::TESForm* form)
@@ -31,6 +32,13 @@ namespace Hooks
 		logusage("[Hooks] [GetName] 3");
 		return _GetName(form);
 	}
+
+	void AnimationEventHook::AnimationEvent(RE::BSAnimationGraphEvent& a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* src)
+	{
+		logusage("[Hooks] [AnimationEvent]");
+		//return _AnimationEvent(arg1, arg2, arg3, arg4);
+	}
+
 }
 
 namespace Hooks_Funcs

@@ -150,8 +150,9 @@ struct Spreading
 		kExtremeConditions = 21,
 		kActionPhysical = 22,
 		kActionMagical = 23,
+		kActionVoice = 24,
 
-		kMaxValue = 24,
+		kMaxValue = 25,
 	};
 };
 
@@ -298,6 +299,7 @@ struct DiseaseFlags
 		kOnHitH2H = 1 << 20,
 		kGetHitMelee = 1 << 21,
 		kGetHitH2H = 1 << 22,
+		kActionVoice = 1 << 23,
 	};
 };
 

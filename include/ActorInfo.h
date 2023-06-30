@@ -72,6 +72,8 @@ private:
 
 	static inline Data* data = nullptr;
 
+	static inline Events::EventHandler* events = nullptr;
+
 public:
 	/// <summary>
 	/// Sets the current position of the player character
@@ -962,6 +964,7 @@ private:
 	uint64_t disflagsprog = 0;
 
 	int currentticks = 0;
+	int physicalactions = 0;
 
 	friend class Events::EventHandler;
 
@@ -1044,7 +1047,10 @@ public:
 
 	void ApplyDiseaseModifier(Diseases::Disease disease, CureDiseaseOption* cure);
 
-	void PerformingPhysicalAction();
+
+	void UpdatePerformingPhysicalAction();
+
+	int GetPhysicalActions();
 
 	#pragma endregion
 };

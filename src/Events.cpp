@@ -789,6 +789,26 @@ TESDeathEventEnd:
 		return EventResult::kContinue;
 	}
 
+	/// <summary>
+	/// EventHandler for end of fast travel
+	/// </summary>
+	/// <param name="a_event"></param>
+	/// <param name="a_eventSource"></param>
+	/// <returns></returns>
+	EventResult EventHandler::ProcessEvent(const RE::TESFastTravelEndEvent* a_event, RE::BSTEventSource<RE::TESFastTravelEndEvent>*)
+	{
+		// very important event. Allows to catch actors and other stuff that gets deleted, without dying, which could cause CTDs otherwise
+
+		LOG_1("{}[Events] [TESFastTravelEndEvent]");
+
+		Game::SetFastTraveling(false);
+		Main::InitThreads();
+
+		Main::RegisterFastTravelNPCs();
+
+		return EventResult::kContinue;
+	}
+
 
     /// <summary>
     /// returns singleton to the EventHandler
@@ -816,6 +836,12 @@ TESDeathEventEnd:
 		LOG1_1("{}Registered {}", typeid(RE::TESCellAttachDetachEvent).name());
 		scriptEventSourceHolder->GetEventSource<RE::TESActivateEvent>()->AddEventSink(EventHandler::GetSingleton());
 		LOG1_1("{}Registered {}", typeid(RE::TESActivateEvent).name());
+		scriptEventSourceHolder->GetEventSource<RE::TESFastTravelEndEvent>()->AddEventSink(EventHandler::GetSingleton());
+		LOG1_1("{}Registered {}", typeid(RE::TESFastTravelEndEvent).name())
+		scriptEventSourceHolder->GetEventSource<RE::TESFormDeleteEvent>()->AddEventSink(EventHandler::GetSingleton());
+		LOG1_1("{}Registered {}", typeid(RE::TESFormDeleteEvent).name())
+		RE::PlayerCharacter::GetSingleton()->AsBGSActorCellEventSource()->AddEventSink(EventHandler::GetSingleton());
+		LOG1_1("{}Registered {}", typeid(RE::BGSActorCellEvent).name());
 		RE::TESHarvestedEvent::GetEventSource()->AddEventSink(EventHandler::GetSingleton());
 		LOG1_1("{}Registered {}", typeid(RE::TESHarvestedEvent::ItemHarvested).name());
 		RE::BSInputDeviceManager::GetSingleton()->AddEventSink(EventHandler::GetSingleton());

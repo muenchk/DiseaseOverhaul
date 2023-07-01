@@ -63,34 +63,28 @@ namespace Events
 		static inline std::forward_list<std::shared_ptr<ActorInfo>> combatants;
 
 		/// <summary>
-		/// list that holds currently handled cells
+		/// list of npcs that should be registered after fast travel has ended
 		/// </summary>
-		static inline std::unordered_set<std::shared_ptr<CellInfo>> cellist{};
+		static inline std::list<RE::ActorHandle> toregister;
 
 		//-------------------Handler-------------------------
 
 		/// <summary>
 		/// if set to true stops the CheckActors thread on its next iteration
 		/// </summary>
-		static inline bool stopactorhandler = false;
-		static inline bool skipactorhandler = false;
+		static inline bool _handleactorsstop;
 		/// <summary>
 		/// [true] if the actorhandler is running, [false] if the thread died
 		/// </summary>
-		static inline bool actorhandlerrunning = false;
+		static inline bool _handleactorsrunning;
 		/// <summary>
 		/// [true] if the actorhandler is in an active iteration, [false] if it is sleeping
 		/// </summary>
-		static inline bool actorhandlerworking = false;
+		static inline bool _handleactorsworking;
 		/// <summary>
 		/// thread running the CheckActors function
 		/// </summary>
-		static inline std::thread* actorhandler = nullptr;
-
 		static inline std::thread* _handleactors = nullptr;
-		static inline bool _handleactorsrunning;
-		static inline bool _handleactorsworking;
-		static inline bool _handleactorsstop;
 
 	public:
 		static inline bool particlehandling = true;
@@ -266,6 +260,11 @@ namespace Events
 		static void RegisterNPC(RE::Actor* actor);
 
 		/// <summary>
+		/// Registers NPCs that could not be registered during fast travel
+		/// </summary>
+		static void RegisterFastTravelNPCs();
+
+		/// <summary>
 		/// Unregisters an NPC form handling
 		/// </summary>
 		/// <param name="actor"></param>
@@ -381,6 +380,18 @@ namespace Events
 		/// <param name="length"></param>
 		/// <returns></returns>
 		static long ReadDeadActors(SKSE::SerializationInterface* a_intfc, uint32_t length);
+
+		//---------------------Threads-----------------------
+
+		/// <summary>
+		/// Kills all active threads
+		/// </summary>
+		static void KillThreads();
+		/// <summary>
+		/// Inits all inactive threads
+		/// </summary>
+		static void InitThreads();
+
 	};
 
 
@@ -399,6 +410,7 @@ namespace Events
 		public RE::BSTEventSink<RE::TESContainerChangedEvent>,
 		public RE::BSTEventSink<RE::BGSActorCellEvent>,
 		public RE::BSTEventSink<RE::TESActivateEvent>,
+		public RE::BSTEventSink<RE::TESFastTravelEndEvent>,
 		public RE::BSTEventSink<RE::BSAnimationGraphEvent>
 	{
 	public:
@@ -488,6 +500,13 @@ namespace Events
 		/// <param name="a_eventSource"></param>
 		/// <returns></returns>
 		virtual EventResult ProcessEvent(const RE::TESContainerChangedEvent* a_event, RE::BSTEventSource<RE::TESContainerChangedEvent>* a_eventSource) override;
+		/// <summary>
+		/// EventHandler for end of fast travel
+		/// </summary>
+		/// <param name="a_event"></param>
+		/// <param name="a_eventSource"></param>
+		/// <returns></returns>
+		virtual EventResult ProcessEvent(const RE::TESFastTravelEndEvent* a_event, RE::BSTEventSource<RE::TESFastTravelEndEvent>* a_eventSource) override;
 
 		/// <summary>
 		/// Handles an item being removed from a container

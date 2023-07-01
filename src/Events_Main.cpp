@@ -10,6 +10,7 @@
 #include "BufferOperations.h"
 #include "Distribution.h"
 #include "Events.h"
+#include "Game.h"
 #include "Logging.h"
 #include "Random.h"
 #include "Settings.h"
@@ -25,7 +26,7 @@ namespace Events
 	void Main::HandleActors()
 	{
 		// wait until processing is allowed, or we should kill ourselves
-		while (!CanProcess() && stopactorhandler == false)
+		while ((!CanProcess() || Game::IsFastTravelling()) && _handleactorsstop == false)
 			std::this_thread::sleep_for(10ms);
 		LOG_1("{}[Events] [HandleActors]");
 		_handleactorsrunning = true;
@@ -47,9 +48,53 @@ namespace Events
 		std::vector<std::shared_ptr<ActorInfo>> allinfected;
 		std::vector<Diseases::Disease> disvals;
 
+		auto WaitForFastTravel = [&actors, &actorsreduced, &infected, &allinfected]() {
+			if (Game::IsFastTravelling()) {
+					while (Game::IsFastTravelling() && _handleactorsstop == false && CanProcess() == true)
+						std::this_thread::sleep_for(10ms);
+					if (_handleactorsstop || !CanProcess())
+						return;
+					auto itr = actors.begin();
+					while (itr != actors.end())
+					{
+						if ((*itr)->IsValid())
+							itr++;
+						else
+							itr = actors.erase(itr);
+					}
+					itr = actorsreduced.begin();
+					while (itr != actorsreduced.end()) {
+						if ((*itr)->IsValid())
+							itr++;
+						else
+							itr = actorsreduced.erase(itr);
+					}
+					itr = allinfected.begin();
+					while (itr != allinfected.end()) {
+						if ((*itr)->IsValid())
+							itr++;
+						else
+							itr = allinfected.erase(itr);
+					}
+					for (int i = 0; i < Diseases::kMaxValue; i++)
+					{
+						itr = infected[i].begin();
+						while (itr != infected[i].end()) {
+							if ((*itr)->IsValid())
+								itr++;
+							else
+								itr = infected[i].erase(itr);
+						}
+					}
+				} };
+
 		while (_handleactorsstop == false) {
 			if (!CanProcess())
 				goto HandleActorsSkipIteration;
+			if (Game::IsFastTravelling()) {
+				LOG_2("{}[Events] [CheckActors] Skip iteration due to Fast Travel");
+				goto HandleActorsSkipIteration;
+			}
 
 			_handleactorsworking = true;
 
@@ -71,9 +116,9 @@ namespace Events
 				std::shared_ptr<CellInfo> cinfo;
 				// get cell information
 				if (std::shared_ptr<ActorInfo> playerinfo = playerweak.lock()) {
-					cinfo = data->FindCell(playerinfo->GetParentCell());
-					if (!cellist.contains(cinfo))
-						cellist.insert(cinfo);
+					//cinfo = data->FindCell(playerinfo->GetParentCell());
+					//if (!cellist.contains(cinfo))
+					//	cellist.insert(cinfo);
 					actors.push_back(playerinfo);
 				}
 
@@ -81,21 +126,6 @@ namespace Events
 				std::shared_ptr<WeatherInfo> winfo = data->FindWeather(RE::Sky::GetSingleton()->currentWeather);
 
 				LOG_1("{}[Events] [HandleActors] get all actors");
-
-				/*auto citer = cellist.begin();
-				while (citer != cellist.end()) {
-					cinfo = *citer;
-					// first get all actors that shall be handled in player cell
-					for (auto& ptr : cinfo->cell->GetRuntimeData().references) {
-						if (ptr.get()) {
-							actor = ptr.get()->As<RE::Actor>();
-							if (actor) {
-								actors.push_back(data->FindActor(actor));
-							}
-						}
-					}
-					citer++;
-				}*/
 
 				LOG1_1("{}[Events] [HandleActors] registered actors {}", acset.size());
 				for (auto& weak : acset)
@@ -108,7 +138,7 @@ namespace Events
 				// release lock
 				sem.release();
 
-				if (!CanProcess())
+				if (!CanProcess() || Game::IsFastTravelling())
 					goto HandleActorsSkipIteration;
 				if (IsPlayerDead())
 					break;
@@ -157,6 +187,11 @@ namespace Events
 					itra++;
 				}
 
+				// wait until fast travel is over to calculate tick
+				WaitForFastTravel();
+				if (!CanProcess() || _handleactorsstop)
+					goto HandleActorsSkipIteration;
+
 				PROF1_1("{}[Events] [HandleActors] execution time: Startup: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()));
 				last = std::chrono::steady_clock::now();
 
@@ -168,7 +203,6 @@ namespace Events
 				{
 					LOG3_1("{}[Events] [HandleActors] calculate particle effects. actors {}, infected {}, actorsreduced {}", actors.size(), allinfected.size(), actorsreduced.size());
 					// will be deleted after we leave the block
-					//std::unordered_map<uint64_t /*actormashup*/, float /*distance*/> distances = UtilityAlch::GetActorDistancesMap(allinfected, actors, Settings::Disease::_particleRange);
 					auto list = UtilityAlch::GetActorDistancesList(allinfected, actorsreduced, Settings::Disease::_particleRange);
 					//LOG1_1("{}[Events] [HandleActors] calculate particle effects for {} pairs", distances.size());
 					//LOG1_1("{}[Events] [HandleActors] calculate particle effects for {} pairs", list.size());
@@ -189,9 +223,6 @@ namespace Events
 						std::shared_ptr<ActorInfo> infec, act;
 						std::shared_ptr<DiseaseInfo> dinfo;
 						int idx2;
-						//auto iter = distances.begin();
-						//while (iter != distances.end()) {
-						//for (auto& [first, second] : list) {
 #pragma omp parallel for num_threads(4) schedule(runtime) private(infec, act, stage, dinfo) shared(dis, disval, list)
 						for (int i = 0; i < list.size(); i++) {
 							auto& [first, second] = list[i];
@@ -209,7 +240,6 @@ namespace Events
 							}
 							//LOG2_1("{}tried to access index: {} and {}", iter->first >> 32, (uint32_t)(iter->first));
 							//LOG2_1("{}tried to access index: {} and {}", first >> 32, (uint32_t)(first));
-							//idx2 = (uint32_t)iter->first;
 							idx2 = (uint32_t)first;
 							act = actorsreduced[idx2];
 							float scale = 0;
@@ -239,7 +269,6 @@ namespace Events
 								actorsreduced[idx2]->AddDiseasePoints(disval, scale * std::get<1>(stage->_spreading[Spreading::kParticle]));
 							}
 
-							//iter++;
 						}
 					}
 				}
@@ -249,6 +278,11 @@ namespace Events
 
 				Stats::MainHandler_Particles_Times.push_back(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count());
 
+				// wait until fast travel is over to calculate tick
+				WaitForFastTravel();
+				if (!CanProcess() || _handleactorsstop)
+					goto HandleActorsSkipIteration;
+				
 				LOG_1("{}[Events] [HandleActors] calculate air effects");
 
 				// calculate effects occuring due to air infection
@@ -334,6 +368,11 @@ namespace Events
 
 				PROF1_1("{}[Events] [HandleActors] execution time: Air: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - last).count()));
 				last = std::chrono::steady_clock::now();
+
+				// wait until fast travel is over to calculate tick
+				WaitForFastTravel();
+				if (!CanProcess() || _handleactorsstop)
+					goto HandleActorsSkipIteration;
 
 				// calculate static cell and weather effects
 				// also calculate regular disease advancement while we are at it
@@ -522,6 +561,11 @@ namespace Events
 					}
 				}
 
+				// wait until fast travel is over to calculate tick
+				WaitForFastTravel();
+				if (!CanProcess() || _handleactorsstop)
+					goto HandleActorsSkipIteration;
+
 				PROF1_1("{}[Events] [HandleActors] execution time: Static: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - last).count()));
 				last = std::chrono::steady_clock::now();
 
@@ -546,10 +590,6 @@ namespace Events
 				}
 
 				LOG_1("{}[Events] [HandleActors] delete vars");
-
-				// clean up player cell if needed
-				//if (cinfo->cell->IsAttached() == false)
-				//	cellist.erase(cinfo);
 
 				// endtime
 				uint64_t runtime = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count();
@@ -589,12 +629,35 @@ HandleActorsSkipIteration:
 		_handleactorsstop = false;
 	}
 
+	void Main::KillThreads()
+	{
+		_handleactorsstop = true;
+		std::this_thread::sleep_for(10ms);
+		if (_handleactors != nullptr)
+			_handleactors->~thread();
+		_handleactors = nullptr;
+	}
+
+	void Main::InitThreads()
+	{
+		if (_handleactors != nullptr) {
+			// if the thread is there, then destroy and delete it
+			// if it is joinable and not running it has already finished, but needs to be joined before
+			// it can be destroyed savely
+			_handleactors->~thread();
+			delete _handleactors;
+			_handleactors = nullptr;
+		}
+		_handleactors = new std::thread(HandleActors);
+		_handleactors->detach();
+	}
+
 	void Main::LoadGameCallback(SKSE::SerializationInterface* /*a_intfc*/)
 	{
 		LOG_1("{}[Events] [LoadGameCallback]");
 		auto begin = std::chrono::steady_clock::now();
 		// if we canceled the main thread, reset that
-		stopactorhandler = false;
+		_handleactorsstop = false;
 		initialized = false;
 
 		if (_handleactorsrunning == false) {
@@ -672,14 +735,11 @@ HandleActorsSkipIteration:
 	{
 		LOG_1("{}[Events] [RevertGameCallback]");
 		enableProcessing = false;
-		_handleactorsstop = true;
-		std::this_thread::sleep_for(10ms);
-		if (_handleactors != nullptr)
-			_handleactors->~thread();
+		KillThreads();
 		LOG1_1("{}[PlayerDead] {}", playerdied);
 		// reset actor processing list
 		acset.clear();
-		cellist.clear();
+		//cellist.clear();
 
 		World::GetSingleton()->Reset();
 	}

@@ -1,6 +1,7 @@
 
 #include "ActorManipulation.h"
 #include "Events.h"
+#include "Game.h"
 #include "Random.h"
 #include "Utility.h"
 #include "UtilityAlch.h"
@@ -181,6 +182,13 @@ namespace Events
 		// exit if the actor is unsafe / not valid
 		if (Utility::ValidateActor(actor) == false)
 			return;
+		// if currently fasttraveling, save actor to register later
+		if (Game::IsFastTravelling()) {
+			LOG1_1("{}[Events] [RegisterNPC] Saving for later: {}", Utility::PrintForm(actor));
+			toregister.push_back(actor->GetHandle());
+			LOG_1("{}[Events] [RegisterNPC] Saved");
+			return;
+		}
 		LOG1_1("{}[Events] [RegisterNPC] Trying to register new actor for potion tracking: {}", Utility::PrintForm(actor));
 		std::shared_ptr<ActorInfo> acinfo = data->FindActor(actor);
 		std::shared_ptr<CellInfo> cinfo = data->FindCell(actor->GetParentCell());
@@ -205,9 +213,9 @@ namespace Events
 			LOG_1("{}[Events] [RegisterNPC] Actor already registered");
 			return;
 		}
-		if (!cellist.contains(cinfo)) {
-			cellist.insert(cellist.begin(), cinfo);
-		}
+		//if (!cellist.contains(cinfo)) {
+		//	cellist.insert(cellist.begin(), cinfo);
+		//}
 		sem.release();
 
 		//acinfo->ForceIncreaseStage(Diseases::kAshWoeBlight);
@@ -219,6 +227,20 @@ namespace Events
 			return;
 
 		LOG_1("{}[Events] [RegisterNPC] finished registering NPC");
+	}
+
+	/// <summary>
+	/// Registers NPCs that could not be registered during fast travel
+	/// </summary>
+	void Main::RegisterFastTravelNPCs()
+	{
+		RE::Actor* reg = nullptr;
+
+		while (!toregister.empty()) {
+			reg = toregister.front().get().get();
+			toregister.pop_front();
+			RegisterNPC(reg);
+		}
 	}
 
 	/// <summary>

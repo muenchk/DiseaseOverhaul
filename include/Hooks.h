@@ -92,6 +92,69 @@ namespace Hooks
 		}
 	};
 
+	/// <summary>
+	/// executed when confirming fast travel message box on world map
+	/// </summary>
+	class FastTravelConfirmHook
+	{
+	public:
+		static void InstallHook()
+		{
+			REL::Relocation<uintptr_t> target{ REL::VariantID(52236, 53127, 0x91a4e0), REL::VariantOffset(0x31, 0x31, 0x31) };
+			auto& trampoline = SKSE::GetTrampoline();
+
+			_FastTravelConfirm = trampoline.write_call<5>(target.address(), FastTravelConfirm);
+		}
+
+	private:
+		static bool FastTravelConfirm(uint64_t self, uint64_t menu);
+		static inline REL::Relocation<decltype(FastTravelConfirm)> _FastTravelConfirm;
+	};
+
+	class Papyrus_FastTravelHook
+	{
+	private:
+		static inline uint64_t remainder_1;
+		static inline uint64_t remainder_2;
+
+	public:
+		static void InstallHook()
+		{
+			REL::Relocation<uintptr_t> targetbegin{ REL::VariantID(54824, 55457, 0), REL::VariantOffset(0x78, 0x78, 0) };
+			REL::Relocation<uintptr_t> targetend{ REL::VariantID(54824, 55457, 0), REL::VariantOffset(0xD7, 0xD7, 0) };
+			auto& trampoline = SKSE::GetTrampoline();
+
+			struct Patch : Xbyak::CodeGenerator
+			{
+				Patch(uintptr_t a_remainder, uintptr_t a_fastTravelBegin)
+				{
+					Xbyak::Label fdec;
+
+					mov(ptr[rsp + 0x50], rcx);
+					//mov(rdi, rdx);
+					//mov(rsi, rcx);
+					call(ptr[rip + fdec]);
+
+					mov(rax, qword[a_remainder]);
+					jmp(rax);
+
+					L(fdec);
+					dq(a_fastTravelBegin);
+				}
+			};
+
+			Patch patch{ (uintptr_t)(&remainder_1), reinterpret_cast<uintptr_t>(FastTravelBegin) };
+			patch.ready();
+
+			remainder_1 = trampoline.write_branch<5>(targetbegin.address(), trampoline.allocate(patch));
+			remainder_1 = targetbegin.address() + 0x5;
+		}
+
+	private:
+		static void FastTravelBegin();
+	};
+
+
 	void InstallHooks();
 }
 

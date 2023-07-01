@@ -1,4 +1,6 @@
 #include "Data.h"
+#include "Events.h"
+#include "Game.h"
 #include "Hooks.h"
 #include "Logging.h"
 #include "Settings.h"
@@ -16,6 +18,8 @@ namespace Hooks
 		if (Settings::Infection::_ShowInfectionStatus)
 			PowerOfThree::Install();
 		//AnimationEventHook::Install();
+		Papyrus_FastTravelHook::InstallHook();
+		FastTravelConfirmHook::InstallHook();
 	}
 
 	RE::BSFixedString GetNameHook::GetName(RE::TESForm* form)
@@ -37,6 +41,21 @@ namespace Hooks
 	{
 		logusage("[Hooks] [AnimationEvent]");
 		//return _AnimationEvent(arg1, arg2, arg3, arg4);
+	}
+
+	void Papyrus_FastTravelHook::FastTravelBegin()
+	{
+		LOG_1("{}[Hooks] [FastTravelBegin] Begin Fast Travel");
+		Game::SetFastTraveling(true);
+		Events::Main::KillThreads();
+	}
+
+	bool FastTravelConfirmHook::FastTravelConfirm(uint64_t self, uint64_t menu)
+	{
+		LOG_1("{}[Hooks] [FastTravelConfirm] Begin FastTravel");
+		Game::SetFastTraveling(true);
+		Events::Main::KillThreads();
+		return _FastTravelConfirm(self, menu);
 	}
 
 }

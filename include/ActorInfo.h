@@ -16,6 +16,8 @@ class Data;
 
 class CureDiseaseOption;
 
+class CellInfo;
+
 #define aclock ((void)0);  //std::lock_guard<std::mutex> guard(mutex);
 
 /// <summary>
@@ -52,6 +54,8 @@ enum CustomItemFlag
 	DeathObject = 1 << 29,
 	Object = 1 << 30,
 };
+
+
 
 /// <summary>
 /// Stores information about an actor.
@@ -236,7 +240,7 @@ public:
 
 	std::string _altName = "";
 
-	static inline const uint32_t version = 0x10000001;
+	static inline const uint32_t version = 0x10000002;
 
 	ActorInfo(RE::Actor* _actor);
 	ActorInfo(bool blockedReset);
@@ -857,14 +861,34 @@ public:
 	/// <returns></returns>
 	std::string GetActorBaseFormEditorID();
 
+	/// <summary>
+	/// Returns the parent cell of the actor
+	/// </summary>
+	/// <returns></returns>
 	RE::TESObjectCELL* GetParentCell();
 
+	/// <summary>
+	/// Returns the flags of the actors parent cell
+	/// </summary>
+	/// <returns></returns>
 	SKSE::stl::enumeration<RE::TESObjectCELL::Flag, std::uint16_t> GetParentCellFlags();
 
+	/// <summary>
+	/// Returns the actors worldspace
+	/// </summary>
+	/// <returns></returns>
 	RE::TESWorldSpace* GetWorldspace();
 
+	/// <summary>
+	/// Returns the formID of the actors worldspace
+	/// </summary>
+	/// <returns></returns>
 	RE::FormID GetWorldspaceID();
 
+	/// <summary>
+	/// Returns the position of the actor
+	/// </summary>
+	/// <returns></returns>
 	RE::NiPoint3 GetPosition();
 
 	/// <summary>
@@ -955,16 +979,52 @@ public:
 
 	#pragma region Disease
 
+public:
+
+	struct DynamicStats
+	{
+		float _ignoresDisease = 0;
+		RE::FormID _parentCellID = 0;
+		bool _parentCellInterior = false;
+		RE::FormID _parentWorldSpaceID = 0;
+		RE::NiPoint3 _position;
+		std::shared_ptr<CellInfo> cinfo;
+	};
+
+	DynamicStats dynamic;
+
 private:
 
+	/// <summary>
+	/// last time ticks were calculated
+	/// </summary>
 	float LastGameTime;
+	/// <summary>
+	/// active diseases
+	/// </summary>
 	std::shared_ptr<DiseaseInfo> diseases[Diseases::kMaxValue];
+	/// <summary>
+	/// temporary disease points
+	/// </summary>
 	float diseasepoints[Diseases::kMaxValue];
+	/// <summary>
+	/// flags with active diseases
+	/// </summary>
 	uint64_t disflags = 0;
+	/// <summary>
+	/// flags with progressing diseases
+	/// </summary>
 	uint64_t disflagsprog = 0;
 
+	/// <summary>
+	/// number of disease ticks to process
+	/// </summary>
 	int currentticks = 0;
+	/// <summary>
+	/// number of physical actions currently performed
+	/// </summary>
 	int physicalactions = 0;
+
 
 	friend class Events::EventHandler;
 
@@ -1014,8 +1074,22 @@ public:
 	/// </summary>
 	/// <returns></returns>
 	bool IsInfected();
+	/// <summary>
+	/// returns whether the given disease is active
+	/// </summary>
+	/// <param name="dis"></param>
+	/// <returns></returns>
 	bool IsInfected(Diseases::Disease dis);
+	/// <summary>
+	/// returns whether there is a progressing disease
+	/// </summary>
+	/// <returns></returns>
 	bool IsInfectedProgressing();
+	/// <summary>
+	/// returns whether the given disease is progressing
+	/// </summary>
+	/// <param name="dis"></param>
+	/// <returns></returns>
 	bool IsInfectedProgressing(Diseases::Disease dis);
 
 	/// <summary>
@@ -1033,24 +1107,65 @@ public:
 	/// </summary>
 	void ResetDiseases();
 
+	/// <summary>
+	/// Saves disease points for late application
+	/// </summary>
+	/// <param name="disval"></param>
+	/// <param name="points"></param>
 	void AddDiseasePoints(Diseases::Disease disval, float points);
 
+	/// <summary>
+	/// Progresses all diseases by the saved amount of disease points
+	/// </summary>
+	/// <returns></returns>
 	[[nodiscard]] bool ProgressAllDiseases();
 
+	/// <summary>
+	/// Sets the amount of ticks to calculate in the next iteration
+	/// </summary>
+	/// <param name="ticks"></param>
 	void SetDiseaseTicks(int ticks) { currentticks = ticks; }
 
+	/// <summary>
+	/// Returns the aount of ticks to calculate in the next iteration
+	/// </summary>
+	/// <returns></returns>
 	int GetDiseaseTicks() { return currentticks; }
 
+	/// <summary>
+	/// sets the time ticks were last calculated
+	/// </summary>
+	/// <param name="time"></param>
 	void SetDiseaseLastTime(float time) { LastGameTime = time; }
 
+	/// <summary>
+	/// Returns the time ticks were last calculated
+	/// </summary>
+	/// <returns></returns>
 	float GetDiseaseLastTime() { return LastGameTime; }
 
+	/// <summary>
+	/// Applies the given cure to the disease
+	/// </summary>
+	/// <param name="disease"></param>
+	/// <param name="cure"></param>
 	void ApplyDiseaseModifier(Diseases::Disease disease, CureDiseaseOption* cure);
 
-
+	/// <summary>
+	/// Updates the currently active 
+	/// </summary>
 	void UpdatePerformingPhysicalAction();
 
+	/// <summary>
+	/// returns the number of physical actions
+	/// </summary>
+	/// <returns></returns>
 	int GetPhysicalActions();
+
+	/// <summary>
+	/// Updates dynamic information for static disease processing
+	/// </summary>
+	void UpdateDynamicStats();
 
 	#pragma endregion
 };

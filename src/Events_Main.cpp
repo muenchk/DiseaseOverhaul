@@ -113,12 +113,9 @@ namespace Events
 				sem.acquire();
 				// take iter time
 
-				std::shared_ptr<CellInfo> cinfo;
+				//std::shared_ptr<CellInfo> cinfo;
 				// get cell information
 				if (std::shared_ptr<ActorInfo> playerinfo = playerweak.lock()) {
-					//cinfo = data->FindCell(playerinfo->GetParentCell());
-					//if (!cellist.contains(cinfo))
-					//	cellist.insert(cinfo);
 					actors.push_back(playerinfo);
 				}
 
@@ -130,8 +127,9 @@ namespace Events
 				LOG1_1("{}[Events] [HandleActors] registered actors {}", acset.size());
 				for (auto& weak : acset)
 				{
-					if (auto acinfo = weak.lock())
+					if (auto acinfo = weak.lock()) {
 						actors.push_back(acinfo);
+					}
 				}
 				LOG1_1("{}[Events] [HandleActors] valid actors {}", acset.size());
 
@@ -153,6 +151,7 @@ namespace Events
 #pragma omp parallel for num_threads(4) shared(currentgameday) schedule(runtime)
 				for (int x = 0; x < actors.size(); x++) {
 					// updates currently performed physical actions
+					actors[x]->UpdateDynamicStats();
 					actors[x]->UpdatePerformingPhysicalAction();
 					actors[x]->SetDiseaseTicks((int)((currentgameday - actors[x]->GetDiseaseLastTime()) / Settings::System::_ticklength));
 					//LOG4_1("{}[Events] [HandleActors] time: {}\tlast: {}\tticklength: {}\tticks: {}", currentgameday, actors[x]->GetDiseaseLastTime(), Settings::System::_ticklength, actors[x]->GetDiseaseTicks());
@@ -186,6 +185,9 @@ namespace Events
 					}
 					itra++;
 				}
+
+				if (actorsreduced.size() == 0)
+					goto HandleActorsSkipIteration;
 
 				// wait until fast travel is over to calculate tick
 				WaitForFastTravel();
@@ -262,7 +264,7 @@ namespace Events
 							case Infectivity::kVeryHigh:
 								scale = 2.0f;
 							}
-							scale = scale * (1 - act->IgnoresDisease());
+							scale = scale * (1 - act->dynamic._ignoresDisease);
 							if (scale == 0)
 								continue;  // got to next infected instead
 							if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kParticle])) {
@@ -293,12 +295,12 @@ namespace Events
 #pragma omp parallel for num_threads(4) schedule(runtime)
 					for (int i = 0; i < allinfected.size(); i++) {
 						// skip those in exterior cells
-						if (allinfected[i]->GetParentCell() && allinfected[i]->GetParentCell()->IsInteriorCell() == false)
+						if (allinfected[i]->dynamic._parentCellInterior == false)
 							continue;
 						std::vector<int> vec;
 						for (int x = 0; x < actorsreduced.size(); x++) {
 							// skip if same actor or not in same cell
-							if (allinfected[i]->GetParentCell() != actorsreduced[x]->GetParentCell() || allinfected[i] == allinfected[x])
+							if (allinfected[i]->dynamic._parentCellID != actorsreduced[x]->dynamic._parentCellID || allinfected[i] == allinfected[x])
 								continue;
 							vec.push_back(x);
 						}
@@ -354,7 +356,7 @@ namespace Events
 									// iterate for number of ticks for this actor
 									for (int t = 0; t < actorsreduced[vec[y]]->GetDiseaseTicks(); t++) {
 										// if chance succeeds
-										if (float scl = scale * (1 - actors[vec[y]]->IgnoresDisease()); scl != 0.0f)
+										if (float scl = scale * (1 - actors[vec[y]]->dynamic._ignoresDisease); scl != 0.0f)
 											if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kAir]))
 												actorsreduced[vec[y]]->AddDiseasePoints(disval, scl * std::get<1>(stage->_spreading[Spreading::kAir]));
 									}
@@ -397,7 +399,7 @@ namespace Events
 							stage = dis->_stages[dinfo->stage];
 						// calc actor point scaling
 						float scale = 1;
-						scale = scale * (1 - actorsreduced[x]->IgnoresDisease());
+						scale = scale * (1 - actorsreduced[x]->dynamic._ignoresDisease);
 						int ticks = actorsreduced[x]->GetDiseaseTicks();
 						float points = 0;
 						//LOG2_1("{}[Events] [HandleActors] base, ticks: {}, scale: {}", ticks, scale);
@@ -409,79 +411,78 @@ namespace Events
 								for (int t = 0; t < ticks; t++) {
 									// handle weather effects
 									if (winfo->IsIntenseCold()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kIntenseCold]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kIntenseCold])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kIntenseCold]);
 									} else if (winfo->IsCold()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kIsCold]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kIsCold])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kIsCold]);
 									}
 									if (winfo->IsIntenseHeat()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kIntenseHeat]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kIntenseHeat])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kIntenseHeat]);
 									} else if (winfo->IsHeat()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kIsHeat]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kIsHeat])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kIsHeat]);
 									}
 									if (winfo->IsAshstorm()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kInAshstorm]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kInAshstorm])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kInAshstorm]);
 									}
 									if (winfo->IsSandstorm()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kInSandstorm]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kInSandstorm])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kInSandstorm]);
 									}
 									if (winfo->IsBlizzard()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kInBlizzard]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kInBlizzard])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kInBlizzard]);
 									}
 									if (winfo->IsRain()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kInRain]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kInRain])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kInRain]);
 									}
 									if (winfo->IsStormy()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kIsStormy]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kIsStormy])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kIsStormy]);
 									} else if (winfo->IsWindy()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kIsWindy]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kIsWindy])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kIsWindy]);
 									}
 									if (winfo->IsExtremeCondition())
 									{
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kExtremeConditions]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kExtremeConditions])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kExtremeConditions]);
 									}
 
 									//  handle cell effects
-									cinfo = data->FindCell(actors[x]->GetParentCell());
-									if (cinfo->IsAshland()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kInAshland]))
+									if (actorsreduced[x]->dynamic.cinfo->IsAshland()) {
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kInAshland])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kInAshland]);
 									}
-									if (cinfo->IsIntenseCold()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kIntenseCold]))
+									if (actorsreduced[x]->dynamic.cinfo->IsIntenseCold()) {
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kIntenseCold])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kIntenseCold]);
-									} else if (cinfo->IsCold()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kIsCold]))
+									} else if (actorsreduced[x]->dynamic.cinfo->IsCold()) {
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kIsCold])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kIsCold]);
 									}
-									if (cinfo->IsIntenseHeat()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kIntenseHeat]))
+									if (actorsreduced[x]->dynamic.cinfo->IsIntenseHeat()) {
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kIntenseHeat])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kIntenseHeat]);
-									} else if (cinfo->IsHeat()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kIsHeat]))
+									} else if (actorsreduced[x]->dynamic.cinfo->IsHeat()) {
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kIsHeat])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kIsHeat]);
 									}
-									if (cinfo->IsDessert()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kInDessert]))
+									if (actorsreduced[x]->dynamic.cinfo->IsDessert()) {
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kInDessert])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kInDessert]);
 									}
-									if (cinfo->IsSwamp()) {
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kInSwamp]))
+									if (actorsreduced[x]->dynamic.cinfo->IsSwamp()) {
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kInSwamp])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kInSwamp]);
 									}
-									if (cinfo->IsExtremeCondition())
+									if (actorsreduced[x]->dynamic.cinfo->IsExtremeCondition())
 									{
-										if (Random::rand100(Random::rand) < std::get<0>(stage->_spreading[Spreading::kExtremeConditions]))
+										if (UtilityAlch::CalcChance(std::get<0>(stage->_spreading[Spreading::kExtremeConditions])))
 											points += scale * std::get<1>(stage->_spreading[Spreading::kExtremeConditions]);
 									}
 								}
@@ -521,27 +522,26 @@ namespace Events
 								}
 
 								//  handle cell effects
-								cinfo = data->FindCell(actors[x]->GetParentCell());
-								if (cinfo->IsAshland()) {
+								if (actorsreduced[x]->dynamic.cinfo->IsAshland()) {
 									points += ((float)std::get<0>(stage->_spreading[Spreading::kInAshland]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kInAshland]) * ticks;
 								}
-								if (cinfo->IsIntenseCold()) {
+								if (actorsreduced[x]->dynamic.cinfo->IsIntenseCold()) {
 									points += ((float)std::get<0>(stage->_spreading[Spreading::kIntenseCold]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kIntenseCold]) * ticks;
-								} else if (cinfo->IsCold()) {
+								} else if (actorsreduced[x]->dynamic.cinfo->IsCold()) {
 									points += ((float)std::get<0>(stage->_spreading[Spreading::kIsCold]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kIsCold]) * ticks;
 								}
-								if (cinfo->IsIntenseHeat()) {
+								if (actorsreduced[x]->dynamic.cinfo->IsIntenseHeat()) {
 									points += ((float)std::get<0>(stage->_spreading[Spreading::kIntenseHeat]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kIntenseHeat]) * ticks;
-								} else if (cinfo->IsHeat()) {
+								} else if (actorsreduced[x]->dynamic.cinfo->IsHeat()) {
 									points += ((float)std::get<0>(stage->_spreading[Spreading::kIsHeat]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kIsHeat]) * ticks;
 								}
-								if (cinfo->IsDessert()) {
+								if (actorsreduced[x]->dynamic.cinfo->IsDessert()) {
 									points += ((float)std::get<0>(stage->_spreading[Spreading::kInDessert]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kInDessert]) * ticks;
 								}
-								if (cinfo->IsSwamp()) {
+								if (actorsreduced[x]->dynamic.cinfo->IsSwamp()) {
 									points += ((float)std::get<0>(stage->_spreading[Spreading::kInSwamp]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kInSwamp]) * ticks;
 								}
-								if (cinfo->IsExtremeCondition()) {
+								if (actorsreduced[x]->dynamic.cinfo->IsExtremeCondition()) {
 									points += ((float)std::get<0>(stage->_spreading[Spreading::kExtremeConditions]) / 100) * scale * std::get<1>(stage->_spreading[Spreading::kInSwamp]) * ticks;
 								}
 							}
@@ -605,18 +605,18 @@ namespace Events
 				PROF1_1("{}[Events] [HandleActors] execution time: {} µs", std::to_string(runtime));
 				LOG1_1("{}[Events] [HandleActors] {} actors handled", std::to_string(actors.size()));
 
-				// reset lists for next iteration
-				actors.clear();
-				actorsreduced.clear();
-				for (int i = 0; i < Diseases::kMaxValue; i++)
-					infected[i].clear();
-				allinfected.clear();
-				disvals.clear();
 			} else {
 				LOG_1("{}[Events] [HandleActors] Skip round.");
 			}
 
 HandleActorsSkipIteration:
+			// reset lists for next iteration
+			actors.clear();
+			actorsreduced.clear();
+			for (int i = 0; i < Diseases::kMaxValue; i++)
+				infected[i].clear();
+			allinfected.clear();
+			disvals.clear();
 			// reset combatants
 			combatants.clear();
 			_handleactorsworking = false;

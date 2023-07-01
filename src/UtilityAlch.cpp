@@ -398,8 +398,11 @@ std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> UtilityAlch
 {
 	std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> distances;
 	float distance = 0.0f;
-	RE::TESObjectCELL* cell = nullptr;
+	//RE::TESObjectCELL* cell = nullptr;
 	RE::TESObjectCELL* cell2 = nullptr;
+	ActorInfo::DynamicStats* ac1;
+	ActorInfo::DynamicStats* ac2;
+
 	distancethreshold *= distancethreshold;
 	std::atomic_flag lock = ATOMIC_FLAG_INIT;
 	// iterate over actors
@@ -413,60 +416,56 @@ std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> UtilityAlch
 				continue;
 			// calc distance
 
+			ac1 = &actors1[i]->dynamic;
+			ac2 = &actors2[c]->dynamic;
+
 			// if actors in same worldspace -> calc distance directly
 			// if actors in exterior / interior -> set to max value
 
 			// if cells have same interior cell flag
-			cell = actors1[i]->GetParentCell();
-			cell2 = actors2[c]->GetParentCell();
-			if (cell != nullptr && cell2 != nullptr) {
-				if (!onlyiteriors && cell->IsInteriorCell() == cell2->IsInteriorCell()) {
-					// if it actually is an interior cell, check whether its the same
-					if (cell->IsInteriorCell()) {
-						if (cell->GetFormID() == cell2->GetFormID()) {
-							//distance = sqrtf(actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
-							distance = (actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
-							//LOG3_5("{}calc, {}, {}, {}", Utility::PrintForm(actors1[i]), Utility::PrintForm(actors2[c]), distance);
-						}
-						// if its not the same set ifinity
-						else {
-							distance = FLT_MAX;
-						}
-					} else {
-						// is exterior cell: check wordspace
-						if (actors1[i]->GetWorldspaceID() == actors2[c]->GetWorldspaceID()) {
-							// same worldspace
-							//distance = sqrtf(actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
-							distance = (actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
-						} else {
-							// different worlspace, set to infinity
-							distance = FLT_MAX;
-						}
+			if (!onlyiteriors && ac1->_parentCellInterior == ac2->_parentCellInterior) {
+				// if it actually is an interior cell, check whether its the same
+				if (ac1->_parentCellInterior) {
+					if (ac1->_parentCellID == cell2->GetFormID()) {
+						distance = (ac1->_position.GetSquaredDistance(ac2->_position));
+						//LOG3_5("{}calc, {}, {}, {}", Utility::PrintForm(actors1[i]), Utility::PrintForm(actors2[c]), distance);
 					}
-				} else if (onlyiteriors) {
-					if (cell->IsInteriorCell()) {
-						if (cell->GetFormID() == cell2->GetFormID()) {
-							//distance = sqrtf(actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
-							distance = (actors1[i]->GetPosition().GetSquaredDistance(actors2[c]->GetPosition()));
-						}
-						// if its not the same set ifinity
-						else {
-							distance = FLT_MAX;
-						}
+					// if its not the same set ifinity
+					else {
+						distance = FLT_MAX;
 					}
 				} else {
-					// different cell types, set to infinity
-					distance = FLT_MAX;
-				}
-				//LOG3_1("{}[UtilityAlch] [GetActorDistancesMap] actor1: {},\tactor2: {},\tdistance: {}", actors1[i]->actor->GetName(), actors2[c]->actor->GetName(), distance);
-				// add to vector if distancethreshol holds
-				if (distance < distancethreshold) {
-// the entry is actorid1 concat actor1d2 -> actorid1 = 0x1, actorid2 = 0x30 -> 0x0000000100000030
-//distances.insert_or_assign((((uint64_t)actors1[i]->GetFormID()) << 32) | actors2[c]->GetFormID(), distance);
-					{
-						Spinlock guard(lock);
-						distances.push_back({ (((uint64_t)i) << 32) | (uint64_t)c, distance });
+					// is exterior cell: check wordspace
+					if (ac1->_parentWorldSpaceID == ac2->_parentWorldSpaceID) {
+						// same worldspace
+						distance = (ac1->_position.GetSquaredDistance(ac2->_position));
+					} else {
+						// different worlspace, set to infinity
+						distance = FLT_MAX;
 					}
+				}
+			} else if (onlyiteriors) {
+				if (ac1->_parentCellInterior) {
+					if (ac1->_parentCellID == cell2->GetFormID()) {
+						distance = (ac1->_position.GetSquaredDistance(ac2->_position));
+					}
+					// if its not the same set ifinity
+					else {
+						distance = FLT_MAX;
+					}
+				}
+			} else {
+				// different cell types, set to infinity
+				distance = FLT_MAX;
+			}
+			//LOG3_1("{}[UtilityAlch] [GetActorDistancesMap] actor1: {},\tactor2: {},\tdistance: {}", actors1[i]->actor->GetName(), actors2[c]->actor->GetName(), distance);
+			// add to vector if distancethreshol holds
+			if (distance < distancethreshold) {
+				// the entry is actorid1 concat actor1d2 -> actorid1 = 0x1, actorid2 = 0x30 -> 0x0000000100000030
+				//distances.insert_or_assign((((uint64_t)actors1[i]->GetFormID()) << 32) | actors2[c]->GetFormID(), distance);
+				{
+					Spinlock guard(lock);
+					distances.push_back({ (((uint64_t)i) << 32) | (uint64_t)c, distance });
 				}
 			}
 		}

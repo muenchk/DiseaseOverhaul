@@ -623,4 +623,19 @@ int ActorInfo::GetPhysicalActions()
 	return physicalactions;
 }
 
+void ActorInfo::UpdateDynamicStats()
+{
+	dynamic._ignoresDisease = IgnoresDisease();
+	if (auto cell = GetParentCell()) {
+		dynamic._parentCellID = cell->GetFormID();
+		dynamic._parentCellInterior = cell->IsInteriorCell();
+		dynamic.cinfo = data->FindCell(cell);
+	} else {
+		dynamic._parentCellID = 0;
+		dynamic._parentCellInterior = false;
+		dynamic.cinfo = data->FindCell(nullptr);
+	}
+	dynamic._parentWorldSpaceID = GetWorldspaceID();
+	dynamic._position = GetPosition();
+
 #pragma endregion

@@ -876,6 +876,8 @@ int32_t ActorInfo::GetMinDataSize(int32_t vers)
 	switch (vers) {
 	case 0x10000001:
 		return 25;
+	case 0x10000002:
+		return 0;
 	default:
 		return 0;
 	}

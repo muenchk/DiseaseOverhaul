@@ -80,7 +80,9 @@ namespace Events
 
 	void Main::ProcessInfections(std::shared_ptr<ActorInfo> acinfo)
 	{
-		if (acinfo->ProcessedInitialInfections() == false) {
+		float gamedays = RE::Calendar::GetSingleton()->gameDaysPassed->value;
+		// either infections haven't been calculated or more than 30 days have passed and the actor is not infected anymore
+		if (acinfo->ProcessedInitialInfections() == false || (gamedays - acinfo->ProcessedInitialInfectionsTime() > 30 && acinfo->IsInfected() == false)) {
 			LOG1_1("{}[Events] [ProcessInfections] Actor {}", Utility::PrintForm(acinfo));
 			/* auto tplt = Utility::ExtractTemplateInfo(acinfo->GetActor());*/
 			auto [infections_possible, infections_forced_set] = data->GetPossibleInfections(acinfo, nullptr /*&tplt*/);
@@ -91,6 +93,9 @@ namespace Events
 				LOG_1("{}[Events] [ProcessInfections] Error");
 				return;
 			}
+
+			acinfo->ProcessedInitialInfections(true);
+			acinfo->ProcessedInitialInfectionsTime(gamedays);
 
 			std::uniform_int_distribution<signed> rand5(1, 5);
 

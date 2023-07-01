@@ -757,7 +757,7 @@ HandleActorsSkipIteration:
 				RE::FormID id = actor->GetFormID();
 				uint32_t formid = Utility::Mods::GetIndexLessFormID(id);
 				std::string pluginname = Utility::Mods::GetPluginNameFromID(id);
-				if (a_intfc->OpenRecord('EDID', 0)) {
+				if (a_intfc->OpenRecord('DOED', 0)) {
 					// get entry length
 					int length = 4 + Buffer::CalcStringLength(pluginname);
 					// save written bytes number

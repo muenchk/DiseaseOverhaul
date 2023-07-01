@@ -1,3 +1,4 @@
+#include "DiseaseInfo.h"
 #include "DiseaseStats.h"
 #include "Data.h"
 #include "Random.h"

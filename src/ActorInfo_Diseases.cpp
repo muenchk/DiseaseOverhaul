@@ -24,7 +24,9 @@ void ActorInfo::AddDiseasePoints(Diseases::Disease disval, float points)
 {
 #pragma omp atomic update
 	diseasepoints[disval] += points;
-	loginfo("[ActorInfo] [AddDiseasePoints] Actor: {}, Disease: {}, Points: {}", _formstring, UtilityAlch::ToString(disval), points);
+	if (points != 0) {
+		loginfo("[ActorInfo] [AddDiseasePoints] Actor: {}, Disease: {}, Points: {}", _formstring, UtilityAlch::ToString(disval), points);
+	}
 }
 
 bool ActorInfo::ProgressAllDiseases()
@@ -637,5 +639,6 @@ void ActorInfo::UpdateDynamicStats()
 	}
 	dynamic._parentWorldSpaceID = GetWorldspaceID();
 	dynamic._position = GetPosition();
+}
 
 #pragma endregion

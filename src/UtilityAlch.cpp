@@ -398,15 +398,13 @@ std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> UtilityAlch
 {
 	std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> distances;
 	float distance = 0.0f;
-	//RE::TESObjectCELL* cell = nullptr;
-	RE::TESObjectCELL* cell2 = nullptr;
 	ActorInfo::DynamicStats* ac1;
 	ActorInfo::DynamicStats* ac2;
 
 	distancethreshold *= distancethreshold;
 	std::atomic_flag lock = ATOMIC_FLAG_INIT;
 	// iterate over actors
-#pragma omp parallel for private(cell, cell2, distance) num_threads(4) schedule(runtime)
+#pragma omp parallel for private(distance) num_threads(4) schedule(runtime)
 	for (int i = 0; i < actors1.size(); i++) {
 		// create empty new vector
 		// iterate over all actors in the second list
@@ -426,7 +424,7 @@ std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> UtilityAlch
 			if (!onlyiteriors && ac1->_parentCellInterior == ac2->_parentCellInterior) {
 				// if it actually is an interior cell, check whether its the same
 				if (ac1->_parentCellInterior) {
-					if (ac1->_parentCellID == cell2->GetFormID()) {
+					if (ac1->_parentCellID == ac2->_parentCellID) {
 						distance = (ac1->_position.GetSquaredDistance(ac2->_position));
 						//LOG3_5("{}calc, {}, {}, {}", Utility::PrintForm(actors1[i]), Utility::PrintForm(actors2[c]), distance);
 					}
@@ -446,7 +444,7 @@ std::vector<std::pair<uint64_t /*actormashup*/, float /*distance*/>> UtilityAlch
 				}
 			} else if (onlyiteriors) {
 				if (ac1->_parentCellInterior) {
-					if (ac1->_parentCellID == cell2->GetFormID()) {
+					if (ac1->_parentCellID == ac2->_parentCellID) {
 						distance = (ac1->_position.GetSquaredDistance(ac2->_position));
 					}
 					// if its not the same set ifinity

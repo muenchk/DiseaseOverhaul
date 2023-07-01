@@ -215,7 +215,7 @@ long Data::SaveDeletedActors(SKSE::SerializationInterface* a_intfc)
 	for (auto& actorid : deletedActors) {
 		uint32_t formid = Utility::Mods::GetIndexLessFormID(actorid);
 		std::string pluginname = Utility::Mods::GetPluginNameFromID(actorid);
-		if (a_intfc->OpenRecord('DAID', 0)) {
+		if (a_intfc->OpenRecord('DODA', 0)) {
 			// get entry length
 			int length = 4 + Buffer::CalcStringLength(pluginname);
 			// save written bytes number
@@ -300,7 +300,7 @@ long Data::SaveActorInfoMap(SKSE::SerializationInterface* a_intfc)
 							} else {
 								//LOG1_3("{}[Data] [SaveActorInfoMap] {} Writing ActorInfo if actor not dead", i);
 								LOG2_3("{}[Data] [SaveActorInfoMap] Writing {}, number {}", acinfo->GetName(), i);
-								if (a_intfc->OpenRecord('ACIF', ActorInfo::GetVersion())) {
+								if (a_intfc->OpenRecord('DOAC', ActorInfo::GetVersion())) {
 									//LOG_3("{}[Data] [SaveActorInfoMap] \tget data size");
 									// get entry length
 									int length = acinfo->GetDataSize();

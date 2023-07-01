@@ -33,6 +33,22 @@ namespace Storage
 	{
 		LOG_1("{}[DataStorage] [SaveGameCallback]");
 		WriteData(a_intfc);
+
+		// print statistics to logfile
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] TESHitEvents registered               {}", Stats::Events_TESHitEvent);
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] TESCombatEvents registered            {}", Stats::Events_TESCombatEvent);
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] TESDeathEvents registered             {}", Stats::Events_TESDeathEvent);
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] BGSActorCellEvents registered         {}", Stats::Events_BGSActorCellEvent);
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] TESCellAttachDetachEvents registered  {}", Stats::Events_TESCellAttachDetachEvent);
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] TESEquipEvents registered             {}", Stats::Events_TESEquipEvent);
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] TESFormDeleteEvent registereds        {}", Stats::Events_TESFormDeleteEvent);
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] TESContainerChangedEvent registereds  {}", Stats::Events_TESContainerChangedEvent);
+
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] Bytes Written To Last Savegame        {}", Stats::Storage_BytesWrittenLast);
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] Bytes Read From Last Savegame         {}", Stats::Storage_BytesReadLast);
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] Actors Saved To Last Savegame         {}", Stats::Storage_ActorsSavedLast);
+		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] Actors Read From Last Savegame        {}", Stats::Storage_ActorsReadLast);
+
 		LOG_1("{}[DataStorage] [SaveGameCallback] end");
 	}
 
@@ -97,14 +113,15 @@ namespace Storage
 		loginfo("[DataStorage] [ReadData] Beginning data load...");
 		while (a_intfc->GetNextRecordInfo(type, version, length)) {
 			loginfo("[DataStorage] found record with type {} and length {}", type, length);
+			size += length;
 			switch (type) {
-			case 'ACIF':  // ActorInfo
+			case 'DOAC':  // ActorInfo
 				size += data->ReadActorInfoMap(a_intfc, length, accounter, acdcounter, acfcounter);
 				break;
-			case 'DAID':  // Deleted Actor
+			case 'DODA':  // Deleted Actor
 				size += data->ReadDeletedActors(a_intfc, length);
 				break;
-			case 'EDID':  // Dead Actor
+			case 'DOED':  // Dead Actor
 				size += Events::Main::ReadDeadActors(a_intfc, length);
 				break;
 			}

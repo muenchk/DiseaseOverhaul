@@ -1,7 +1,7 @@
 #pragma once
 #include "AlchemyEffect.h"
 #include "CustomItem.h"
-#include "Disease.h"
+#include "DiseaseInfo.h"
 #include "ID.h"
 
 #include <memory>
@@ -234,8 +234,6 @@ private:
 	/// </summary>
 	long long timestamp_invalid;
 
-	bool _processedInitialInfections = false;
-
 public:
 
 	std::string _altName = "";
@@ -444,17 +442,14 @@ public:
 	void SetWhitelistCalculated() { whitelistedcalculated = true; }
 
 	/// <summary>
-	/// Whether the initial infections have been calculated for the actor
+	/// returns the real time of the last hit registered
 	/// </summary>
 	/// <returns></returns>
-	bool ProcessedInitialInfections() { return _processedInitialInfections; }
-	/// <summary>
-	/// Sets whether the initial infections have been processed
-	/// </summary>
-	/// <param name="processed"></param>
-	void ProcessedInitialInfections(bool processed) { _processedInitialInfections = processed; }
-
 	unsigned long long GetHitCooldown() { return hitcooldown; }
+	/// <summary>
+	/// sets the real time of the last hit registered
+	/// </summary>
+	/// <param name="value"></param>
 	void SetHitCooldown(unsigned long long value) { hitcooldown = value; }
 
 	/// <summary>
@@ -1025,6 +1020,20 @@ private:
 	/// </summary>
 	int physicalactions = 0;
 
+	/// <summary>
+	/// whether the initial infections have been calculated
+	/// </summary>
+	bool _processedInitialInfections = false;
+	/// <summary>
+	/// time the initial infections have been calculated
+	/// </summary>
+	float _processedInitialInfectionsTime = 0;
+
+	/// <summary>
+	/// if set the next time the actor is touched all diseases are reset
+	/// </summary>
+	bool _removealldiseases = false;
+
 
 	friend class Events::EventHandler;
 
@@ -1035,6 +1044,26 @@ private:
 	void DeleteDisease(Diseases::Disease value);
 
 public:
+	/// <summary>
+	/// Whether the initial infections have been calculated for the actor
+	/// </summary>
+	/// <returns></returns>
+	bool ProcessedInitialInfections() { return _processedInitialInfections; }
+	/// <summary>
+	/// Sets whether the initial infections have been processed
+	/// </summary>
+	/// <param name="processed"></param>
+	void ProcessedInitialInfections(bool processed) { _processedInitialInfections = processed; }
+	/// <summary>
+	/// Whether the time the initial infections have been calculated for the actor
+	/// </summary>
+	/// <returns></returns>
+	float ProcessedInitialInfectionsTime() { return _processedInitialInfectionsTime; }
+	/// <summary>
+	/// Sets the time the initial infections have been processed
+	/// </summary>
+	/// <param name="processed"></param>
+	void ProcessedInitialInfectionsTime(float processed) { _processedInitialInfectionsTime = processed; }
 
 	/// <summary>
 	/// finds a specific disease in the list of diseases of this actor

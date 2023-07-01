@@ -80,7 +80,6 @@ namespace Events
 	EventResult EventHandler::ProcessEvent(const RE::BSAnimationGraphEvent* a_event, RE::BSTEventSource<RE::BSAnimationGraphEvent>* a_eventSource)
 	{
 		if (a_event && a_event->holder) {
-			LOG1_1("{}[Events] [BSAnimationGraphEvent] {}", a_event->tag);
 			bool actionPhysical = false;
 			bool actionMagical = false;
 			bool actionVoice = false;
@@ -105,6 +104,7 @@ namespace Events
 
 			// if we don't have anything to do, no need to look up the npc
 			if (actionPhysical || actionMagical || actionVoice) {
+				LOG1_1("{}[Events] [BSAnimationGraphEvent] {}", a_event->tag);
 				if (std::shared_ptr<ActorInfo> acinfo = Main::data->FindActorExisting(a_event->holder->As<RE::Actor>()); acinfo && acinfo->IsValid()) {
 					for (int i = 0; i < Diseases::kMaxValue; i++) {
 						Diseases::Disease disval = static_cast<Diseases::Disease>(i);

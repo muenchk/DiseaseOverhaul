@@ -5,6 +5,8 @@
 
 class ActorInfo;
 
+class DiseaseInfo;
+
 class DiseaseStats
 {
 public:

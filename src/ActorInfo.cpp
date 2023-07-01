@@ -843,32 +843,66 @@ uint32_t ActorInfo::GetVersion()
 
 int32_t ActorInfo::GetDataSize()
 {
-	int32_t size = 0;
-	// versionid
-	//size += 4;
-	// actor id
-	//size += 4;
-	// pluginname
-	size += Buffer::CalcStringLength(pluginname);
-	// durCombat
-	//size += 4;
-	// distributedCustomItems
-	//size += 1;
-	// actorStrength, itemStrength -> int
-	//size += 8;
-	// _boss
-	//size += 1;
-	// valid
-	//size += 1;
-	// _haslefthand
-	//size += 1;
-	// _processedinitialinfections
-	//size += 1;
+	static int32_t size = 0;
+	int dynamicsize = 0;
+	dynamicsize += Buffer::CalcStringLength(pluginname);
+	// only need to calculate the first time
+	if (size == 0) {
+		// ---- General Stuff ----
+		// versionid
+		// 4
+		// actor id
+		// 4
+		// pluginname
+		////size += Buffer::CalcStringLength(pluginname);
+		// durCombat
+		// 4
+		// distributedCustomItems
+		// 1
+		// actorStrength, itemStrength -> int
+		// 8
+		// _boss
+		// 1
+		// valid
+		// 1
+		// _haslefthand
+		// 1
+
+		// ---- Infection Stuff ----
+
+		// hitcooldown
+		// 8
+		// LastGameTime
+		// 4
+		// disflags
+		// 8
+		// disflagsprog
+		// 8
+		// _processedinitialinfections
+		// 1
+		// _processedInitialInfectionsTime
+		// 4
+		// _removealldiseases
+		// 1
+		// numDiseases
+		// 4
+		// diseasePoints
+		// 4 * numDiseases
+		size += 4 * Diseases::kMaxValue;
+		// diseases
+		// datasize * numdiseases  // minsize = 
 
 
-	// all except string are constant:
-	size += 24;
-	return size;
+		// all except string are constant:
+		size += 62;
+	}
+	dynamicsize += size;
+	for (int i = 0; i < Diseases::kMaxValue; i++)
+	{
+		dynamicsize += DiseaseInfo::GetDataSize(diseases[i]);
+	}
+
+	return dynamicsize;
 }
 
 int32_t ActorInfo::GetMinDataSize(int32_t vers)
@@ -877,7 +911,59 @@ int32_t ActorInfo::GetMinDataSize(int32_t vers)
 	case 0x10000001:
 		return 25;
 	case 0x10000002:
-		return 0;
+		{
+			static int32_t size = 0;
+			if (size == 0) {
+				// ---- General Stuff ----
+				// versionid
+				// 4
+				// actor id
+				// 4
+				// pluginname
+				// min 8
+				// durCombat
+				// 4
+				// distributedCustomItems
+				// 1
+				// actorStrength, itemStrength -> int
+				// 8
+				// _boss
+				// 1
+				// valid
+				// 1;
+				// _haslefthand
+				// 1
+
+				// ---- Infection Stuff ----
+
+				// hitcooldown
+				// 8
+				// LastGameTime
+				// 4
+				// disflags
+				// 8
+				// disflagsprog
+				// 8
+				// _processedinitialinfections
+				// 1
+				// _ProcessedInitialInfectionsTime
+				// 4
+				// _removealldiseases
+				// 1
+				// numDiseases
+				// 4
+				// diseasePoints
+				// 4 * numDiseases
+				size += 4 * Diseases::kMaxValue;
+				// diseases
+				// datasize * numdiseases
+				size += 4 * Diseases::kMaxValue;
+
+				// all except string are constant:
+				size += 70;
+			}
+			return size;
+		}
 	default:
 		return 0;
 	}
@@ -887,6 +973,9 @@ bool ActorInfo::WriteData(unsigned char* buffer, int offset)
 {
 	aclock;
 	int addoff = 0;
+
+	// ---- General Stuff ----
+
 	// version
 	Buffer::Write(version, buffer, offset);
 	// valid
@@ -902,6 +991,8 @@ bool ActorInfo::WriteData(unsigned char* buffer, int offset)
 		// save index in normal plugin
 		Buffer::Write(formid & 0x00FFFFFF, buffer, offset);
 	}
+	// pluginname
+	Buffer::Write(pluginname, buffer, offset);
 	// durCombat
 	Buffer::Write(durCombat, buffer, offset);
 	// distributedCustomItems
@@ -914,8 +1005,32 @@ bool ActorInfo::WriteData(unsigned char* buffer, int offset)
 	Buffer::Write(_boss, buffer, offset);
 	// _haslefthand
 	Buffer::Write(_haslefthand, buffer, offset);
+
+	// ---- Infection Stuff ----
+
+	// hitcooldown
+	Buffer::Write(hitcooldown, buffer, offset);
+	// LastGameTime
+	Buffer::Write(LastGameTime, buffer, offset);
+	// disflags
+	Buffer::Write(disflags, buffer, offset);
+	// disflagsprog
+	Buffer::Write(disflagsprog, buffer, offset);
 	// _processedinitialinfections
 	Buffer::Write(_processedInitialInfections, buffer, offset);
+	// _processedInitialInfectionsTime
+	Buffer::Write(_processedInitialInfectionsTime, buffer, offset);
+	// _removealldiseases
+	Buffer::Write(_removealldiseases, buffer, offset);
+	// numDiseases
+	Buffer::Write(static_cast<uint32_t>(Diseases::kMaxValue), buffer, offset);
+	// diseasePoints
+	for (int i = 0; i < Diseases::kMaxValue; i++)
+		Buffer::Write(diseasepoints[i], buffer, offset);
+	// diseases
+	for (int i = 0; i < Diseases::kMaxValue; i++)
+		DiseaseInfo::WriteData(diseases[i], buffer, offset);
+
 	return true;
 }
 
@@ -979,6 +1094,99 @@ bool ActorInfo::ReadData(unsigned char* buffer, int offset, int length)
 				} else {
 					formid.SetOriginalID(reac->GetActorBase()->GetFormID());
 				}
+			}
+			return true;
+		case 0x10000002:
+			{
+				// ---- General Stuff ----
+
+				valid = Buffer::ReadBool(buffer, offset);
+
+				// first try to make sure that the buffer contains all necessary data and we do not go out of bounds
+				int size = GetMinDataSize(ver);
+				int strsize = (int)Buffer::CalcStringLength(buffer, offset + 4);  // offset + actorid is begin of pluginname
+				if (length < size + strsize)
+					return false;
+
+				formid.SetID(Buffer::ReadUInt32(buffer, offset));
+				pluginname = Buffer::ReadString(buffer, offset);
+				// if the actorinfo is not valid, then do not evaluate the actor
+				RE::TESForm* form = Utility::GetTESForm(RE::TESDataHandler::GetSingleton(), formid, pluginname);
+				if (form == nullptr) {
+					form = RE::TESForm::LookupByID(formid);
+					if (!form) {
+						return false;
+					}
+				}
+				RE::Actor* reac = form->As<RE::Actor>();
+				if (reac == nullptr) {
+					return false;
+				}
+				actor = reac->GetHandle();
+				// set formid to the full formid including plugin index
+				formid.SetID(reac->GetFormID());
+
+				name = reac->GetName();
+				durCombat = Buffer::ReadInt32(buffer, offset);
+				_distributedCustomItems = Buffer::ReadBool(buffer, offset);
+				actorStrength = static_cast<ActorStrength>(Buffer::ReadUInt32(buffer, offset));
+				itemStrength = static_cast<ItemStrength>(Buffer::ReadUInt32(buffer, offset));
+				_boss = Buffer::ReadBool(buffer, offset);
+				_haslefthand = Buffer::ReadBool(buffer, offset);
+
+				// ---- Infection Stuff ----
+
+				hitcooldown = Buffer::ReadUInt64(buffer, offset);
+				LastGameTime = Buffer::ReadFloat(buffer, offset);
+				disflags = Buffer::ReadUInt64(buffer, offset);
+				disflagsprog = Buffer::ReadUInt64(buffer, offset);
+				_processedInitialInfections = Buffer::ReadBool(buffer, offset);
+				_processedInitialInfectionsTime = Buffer::ReadFloat(buffer, offset);
+				_removealldiseases = Buffer::ReadBool(buffer, offset);
+				// number of diseases to read
+				int numDiseases = Buffer::ReadUInt32(buffer, offset);
+				// number of diseases to initialize
+				int initdiseases = numDiseases;
+				if (numDiseases > Diseases::kMaxValue)
+					initdiseases = Diseases::kMaxValue;
+				for (int i = 0; i < numDiseases; i++)
+				{
+					float pt = Buffer::ReadFloat(buffer, offset);
+					if (i < initdiseases)
+						diseasepoints[i] = pt;
+				}
+				for (int i = 0; i < numDiseases; i++)
+				{
+					if (i < initdiseases)
+						diseases[i] = DiseaseInfo::ReadData(buffer, offset);
+					else
+						DiseaseInfo::ReadData(buffer, offset); // read but discard
+				}
+
+				// ---- init dependend stuff ----
+				pluginID = Utility::Mods::GetPluginIndex(pluginname);
+				if (pluginID == 0x1) {
+					pluginID = Utility::ExtractTemplateInfo(reac->GetActorBase()).pluginID;
+				}
+				_formstring = Utility::PrintForm(this);
+				// get original id
+				if (const auto extraLvlCreature = reac->extraList.GetByType<RE::ExtraLeveledCreature>()) {
+					if (const auto originalBase = extraLvlCreature->originalBase) {
+						formid.SetOriginalID(originalBase->GetFormID());
+					}
+					if (const auto templateBase = extraLvlCreature->templateBase) {
+						formid.AddTemplateID(templateBase->GetFormID());
+					}
+				} else {
+					formid.SetOriginalID(reac->GetActorBase()->GetFormID());
+				}
+
+				// ---- register for events ----
+				reac->AddAnimationGraphEventSink(events);
+				// ---- init variables ----
+				timestamp_invalid = 0;
+				UpdateMetrics(reac);
+				CalcActorProperties();
 			}
 			return true;
 		default:

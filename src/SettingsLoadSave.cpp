@@ -253,6 +253,8 @@ void Settings::Load()
 	loginfo("[Settings] {} {}", "TickLength", std::to_string(System::_ticklength));
 	System::_showDiseaseEffects = (float)ini.GetDoubleValue("Game", "ShowDiseaseEffects", System::_showDiseaseEffects);
 	loginfo("[Settings] {} {}", "ShowDiseaseEffects", std::to_string(System::_showDiseaseEffects));
+	System::_ticklengthInfectionRegression = (float)ini.GetDoubleValue("Game", "TickLengthInfectionRegression", System::_ticklengthInfectionRegression);
+	loginfo("[Settings] {} {}", "TickLengthInfectionRegression", std::to_string(System::_ticklengthInfectionRegression));
 
 	// Debugging
 	Debug::EnableLog = ini.GetBoolValue("Debug", "EnableLogging", Debug::EnableLog);
@@ -323,6 +325,10 @@ void Settings::Save()
 																				"// values to decrease performance impact.");
 	ini.SetDoubleValue("General", "TickLength", Settings::System::_ticklength, "// Time beween two calculation ticks in game days passed.");
 	ini.SetDoubleValue("General", "ShowDiseaseEffects", Settings::System::_showDiseaseEffects, "// Shows the effects of diseases in the Ative Magic Effect Menu.");
+	ini.SetDoubleValue("General", "TickLengthInfectionRegression", Settings::System::_ticklengthInfectionRegression,
+		"// Diseases in the infection stage loase advancement points every so often\n"
+		"// if they have not senn any recent increase in infection points.\n"
+		"// This ticklength is defined in game hours.");
 
 	// debugging
 	ini.SetBoolValue("Debug", "EnableLogging", Debug::EnableLog, "// Enables logging output. Use with care as logs may get very large.");

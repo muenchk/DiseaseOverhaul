@@ -35,6 +35,11 @@ public:
 	float immuneUntil = 0.0f;
 
 	/// <summary>
+	/// The time points were last gained
+	/// </summary>
+	float LastPointGain = 0.0f;
+
+	/// <summary>
 	/// sum of permanent modifiers applied to an actor.
 	/// such as potions, shrines, spells
 	/// </summary>
@@ -50,7 +55,7 @@ private:
 	static inline const uint32_t invalid_ver1 = 0x748392ed;
 
 public:
-	static void WriteData(std::shared_ptr<DiseaseInfo> dinfo, unsigned char* buffer, int offset);
-	static std::shared_ptr<DiseaseInfo> ReadData(unsigned char* buffer, int offset);
+	static void WriteData(std::shared_ptr<DiseaseInfo> dinfo, unsigned char* buffer, int& offset);
+	static std::shared_ptr<DiseaseInfo> ReadData(unsigned char* buffer, int& offset);
 	static int GetDataSize(std::shared_ptr<DiseaseInfo> dinfo);
 };

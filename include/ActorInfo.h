@@ -78,6 +78,8 @@ private:
 
 	static inline Events::EventHandler* events = nullptr;
 
+	static inline RE::Calendar* calendar = nullptr;
+
 public:
 	/// <summary>
 	/// Sets the current position of the player character
@@ -1010,6 +1012,12 @@ private:
 	/// flags with progressing diseases
 	/// </summary>
 	uint64_t disflagsprog = 0;
+	/// <summary>
+	/// flags with progressing diseases
+	/// </summary>
+	uint64_t disflagsinfec = 0;
+
+	
 
 	/// <summary>
 	/// number of disease ticks to process
@@ -1042,6 +1050,11 @@ private:
 	/// </summary>
 	/// <param name="value"></param>
 	void DeleteDisease(Diseases::Disease value);
+
+	/// <summary>
+	/// effectively removes all diseases
+	/// </summary>
+	void RemoveAllDiseases_Intern();
 
 public:
 	/// <summary>
@@ -1099,6 +1112,12 @@ public:
 	void ForceDecreaseStage(Diseases::Disease value);
 
 	/// <summary>
+	/// Processes static reduction of infection
+	/// </summary>
+	/// <param name="value"></param>
+	void ProcessInfectionRegression(Diseases::Disease value);
+
+	/// <summary>
 	/// returns whether there is an active disease
 	/// </summary>
 	/// <returns></returns>
@@ -1120,6 +1139,12 @@ public:
 	/// <param name="dis"></param>
 	/// <returns></returns>
 	bool IsInfectedProgressing(Diseases::Disease dis);
+	/// <summary>
+	/// returns whether the given disease is in the infection stage
+	/// </summary>
+	/// <param name="dis"></param>
+	/// <returns></returns>
+	bool IsInfectedInfection(Diseases::Disease dis);
 
 	/// <summary>
 	/// cleans up unused DiseaseInfo objects
@@ -1195,6 +1220,11 @@ public:
 	/// Updates dynamic information for static disease processing
 	/// </summary>
 	void UpdateDynamicStats();
+
+	/// <summary>
+	/// Function that removes all diseases from the actor, the next time it is used
+	/// </summary>
+	void RemoveAllDiseases();
 
 	#pragma endregion
 };

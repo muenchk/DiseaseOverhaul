@@ -587,6 +587,11 @@ public:
 		static inline float _ticklength = 0.005f;
 
 		/// <summary>
+		/// [Settings] ticklength for infection regression in game time
+		/// </summary>
+		static inline float _ticklengthInfectionRegression = 0.041f;
+
+		/// <summary>
 		/// [Settings] Whether to display currently active disease effects under Active Magic Effects
 		/// </summary>
 		static inline bool _showDiseaseEffects = true;

@@ -135,6 +135,7 @@ namespace Events
 							}
 						}
 					}
+					acinfo->ProgressAllDiseases();
 				}
 			}
 		}
@@ -311,7 +312,6 @@ namespace Events
 						}
 						break;
 					}
-					/*
 					if (hit != HitType::kNone) {
 						if (acagg->ProgressAllDiseases() && Settings::Disease::_AllowActorDeath) {
 							logusage("[Events] [HandleActors] Actor {} has died from their disease", Utility::PrintFormNonDebug(acagg));
@@ -321,7 +321,7 @@ namespace Events
 							logusage("[Events] [HandleActors] Actor {} has died from their disease", Utility::PrintFormNonDebug(actar));
 							actar->Kill();
 						}
-					}*/
+					}
 				}
 			}
 		}

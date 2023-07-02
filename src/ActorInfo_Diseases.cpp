@@ -33,9 +33,11 @@ bool ActorInfo::ProgressAllDiseases()
 {
 	bool kill = false;
 	for (int i = 0; i < Diseases::kMaxValue; i++) {
-		if (diseasepoints[i] > 0)
+		if (diseasepoints[i] != 0)
 			kill |= ProgressDisease(static_cast<Diseases::Disease>(i), diseasepoints[i]);
 		diseasepoints[i] = 0;
+		if (IsInfectedInfection(static_cast<Diseases::Disease>(i)))
+			ProcessInfectionRegression(static_cast<Diseases::Disease>(i));
 	}
 	return kill;
 }
@@ -84,7 +86,7 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 		diseases[value] = dinfo;
 	}
 
-	float currentgameday = RE::Calendar::GetSingleton()->GetDaysPassed();
+	float currentgameday = calendar->gameDaysPassed->value;
 
 	// check for immunity, if immune don't add points, just deduct
 	if (dinfo->immuneUntil > currentgameday)
@@ -94,6 +96,8 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 	std::shared_ptr<Disease> dis = data->GetDisease(value);
 	float initpoints = points;
 	dinfo->advPoints += points;
+	if (points > 0)
+		dinfo->LastPointGain = currentgameday;
 	switch (dinfo->status) {
 	case DiseaseStatus::kInfection:
 		LOG_4("{}[ActorInfo] [ProgressDisease] Infection");
@@ -319,12 +323,6 @@ bool ActorInfo::ProgressDisease(Diseases::Disease value, float points)
 	}
 	LOG2_4("{}[ActorInfo] [ProgressDisease] stage: {}, end points: {}", dis->_stages[dinfo->stage]->_specifier, dinfo->advPoints);
 
-
-
-
-
-
-
 	CalcDiseaseFlags();
 	LOG_4("{}[ActorInfo] [ProgressDisease] end");
 	return killac;
@@ -354,7 +352,8 @@ bool ActorInfo::ForceIncreaseStage(Diseases::Disease value)
 		diseases[value] = dinfo;
 	}
 
-	float currentgameday = RE::Calendar::GetSingleton()->GetDaysPassed();
+	float currentgameday = calendar->gameDaysPassed->value;
+	dinfo->LastPointGain = currentgameday;
 
 	// do actual work
 	std::shared_ptr<Disease> dis = data->GetDisease(value);
@@ -364,18 +363,11 @@ bool ActorInfo::ForceIncreaseStage(Diseases::Disease value)
 		LOG_4("{}[ActorInfo] [ForceIncreaseStage] advance");
 		// advance to incubation
 		dinfo->stage = 0;
-		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 1");
 		dinfo->status = DiseaseStatus::kProgressing;
-		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 2");
 		dinfo->advPoints = 0;
-		LOG1_4("{}[ActorInfo] [ForceIncreaseStage] 3 {}", (uint64_t)dis->_stages);
-		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 4");
 		dinfo->earliestAdvancement = currentgameday + dis->_stages[0]->_advancementTime;
-		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 5");
 		dinfo->permanentModifiers = 0;
-		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 6");
 		dinfo->permanentModifiersPoints = 0;
-		LOG_4("{}[ActorInfo] [ForceIncreaseStage] 7");
 		// apply effect if there is one
 		if (dis->_stages[0]->effect != nullptr)
 			AddSpell(dis->_stages[0]->effect);
@@ -418,6 +410,7 @@ bool ActorInfo::ForceIncreaseStage(Diseases::Disease value)
 					killac = true;
 			}
 
+			dinfo->LastPointGain = calendar->gameDaysPassed->value;
 			// enter regression
 			dinfo->status = DiseaseStatus::kRegressing;
 			// we do not have a timer for going down stages so reset this one
@@ -435,6 +428,7 @@ bool ActorInfo::ForceIncreaseStage(Diseases::Disease value)
 			//actor->AsMagicTarget()->DispelEffect(dis->_stages[dinfo->stage]->effect, achandle, nullptr);
 			dinfo->advPoints = 0;
 			dinfo->stage++;
+			dinfo->LastPointGain = calendar->gameDaysPassed->value;
 			dinfo->earliestAdvancement = currentgameday + dis->_stages[dinfo->stage]->_advancementTime;
 			// apply effect if there is one
 			if (dis->_stages[dinfo->stage]->effect != nullptr)
@@ -521,6 +515,35 @@ void ActorInfo::ForceDecreaseStage(Diseases::Disease value)
 	LOG_4("{}[ActorInfo] [ForceDecreaseStage] end");
 }
 
+void ActorInfo::ProcessInfectionRegression(Diseases::Disease value)
+{
+	if (!valid || dead)
+		return;
+
+	// sanguinare vampirism is not applicable for infection stage
+	if (value == Diseases::Disease::kSanguinareVampirism)
+		return;
+
+	// stat tracking
+	Stats::DiseaseStats_InfectionRegression++;
+
+	std::shared_ptr<DiseaseInfo> dinfo = FindDisease(value);
+	if (dinfo)
+	{
+		int num = (int)((calendar->gameDaysPassed->value - dinfo->LastPointGain) / (Settings::System::_ticklengthInfectionRegression / 24));
+		if (num > 0) {
+			LOG2_3("{}[ActorInfo] [ProcessInfectionRegression] actor: {}, disease: {}", _formstring, UtilityAlch::ToString(value));
+			dinfo->LastPointGain = calendar->gameDaysPassed->value;
+			auto dis = data->GetDisease(value);
+			if (dis) {
+				dinfo->advPoints -= dis->_baseInfectionReductionPoints * num;
+				if (dinfo->advPoints <= 0)
+					DeleteDisease(value);
+			}
+		}
+	}
+}
+
 bool ActorInfo::IsInfected()
 {
 	return disflags > 0;
@@ -540,6 +563,12 @@ bool ActorInfo::IsInfectedProgressing(Diseases::Disease dis)
 {
 	return (disflagsprog & ((uint64_t)1 << static_cast<EnumType>(dis))) > 0;
 }
+
+bool ActorInfo::IsInfectedInfection(Diseases::Disease dis)
+{
+	return (disflagsinfec & ((uint64_t)1 << static_cast<EnumType>(dis))) > 0;
+}
+
 
 void ActorInfo::CleanDiseases()
 {
@@ -562,6 +591,8 @@ void ActorInfo::CalcDiseaseFlags()
 				disflagsprog = disflagsprog | ((uint64_t)1 << dis->disease);
 			} else if (dis->status == DiseaseStatus::kRegressing) {
 				disflags = disflags | ((uint64_t)1 << dis->disease);
+			} else { // infection
+				disflagsinfec = disflagsinfec | ((uint64_t)1 << dis->disease);
 			}
 		}
 	}
@@ -639,6 +670,37 @@ void ActorInfo::UpdateDynamicStats()
 	}
 	dynamic._parentWorldSpaceID = GetWorldspaceID();
 	dynamic._position = GetPosition();
+}
+
+void ActorInfo::RemoveAllDiseases_Intern()
+{
+	for (auto dinfo : diseases)
+	{
+		if (dinfo) {
+			std::shared_ptr<Disease> dis = data->GetDisease(dinfo->disease);
+			switch (dinfo->status)
+			{
+			case DiseaseStatus::kInfection:
+				DeleteDisease(dinfo->disease);
+				break;
+			case DiseaseStatus::kProgressing:
+			case DiseaseStatus::kRegressing:
+				if (dis->_stages[dinfo->stage]->effect != nullptr)
+					RemoveSpell(dis->_stages[dinfo->stage]->effect);
+				if (dis->permeffect != nullptr)
+					RemoveSpell(dis->permeffect);
+				DeleteDisease(dinfo->disease);
+				break;
+			}
+
+		}
+	}
+	CalcDiseaseFlags();
+}
+
+void ActorInfo::RemoveAllDiseases()
+{
+	RemoveAllDiseases_Intern();
 }
 
 #pragma endregion

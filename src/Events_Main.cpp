@@ -25,6 +25,8 @@ namespace Events
 
 	void Main::HandleActors()
 	{
+		if (_handleactorsrunning)
+			return;
 		// wait until processing is allowed, or we should kill ourselves
 		while ((!CanProcess() || Game::IsFastTravelling()) && _handleactorsstop == false)
 			std::this_thread::sleep_for(10ms);
@@ -161,8 +163,6 @@ namespace Events
 
 				beginparticles = std::chrono::steady_clock::now();
 
-				LOG_1("{}[Events] [HandleActors] calculate particle effects");
-
 				
 #pragma omp parallel num_threads(4)
 				{
@@ -189,6 +189,8 @@ namespace Events
 				if (actorsreduced.size() == 0)
 					goto HandleActorsSkipIteration;
 
+				LOG3_1("{}[Events] [HandleActors] Calculate Diseases. actors {}, infected {}, actorsreduced {}", actors.size(), allinfected.size(), actorsreduced.size());
+
 				// wait until fast travel is over to calculate tick
 				WaitForFastTravel();
 				if (!CanProcess() || _handleactorsstop)
@@ -196,6 +198,8 @@ namespace Events
 
 				PROF1_1("{}[Events] [HandleActors] execution time: Startup: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count()));
 				last = std::chrono::steady_clock::now();
+
+				LOG_1("{}[Events] [HandleActors] calculate particle effects");
 
 				// first calculate effects occuring in particle range
 				// 0) calculate actor pairs for infected
@@ -636,6 +640,7 @@ HandleActorsSkipIteration:
 		if (_handleactors != nullptr)
 			_handleactors->~thread();
 		_handleactors = nullptr;
+		_handleactorsrunning = false;
 	}
 
 	void Main::InitThreads()
@@ -680,8 +685,6 @@ HandleActorsSkipIteration:
 		combatants.clear();
 		// set player to alive
 		PlayerDied((bool)(RE::PlayerCharacter::GetSingleton()->GetActorRuntimeData().boolBits & RE::Actor::BOOL_BITS::kDead) || RE::PlayerCharacter::GetSingleton()->IsDead());
-		enableProcessing = true;
-
 		enableProcessing = true;
 
 		InitializeCompatibilityObjects();

@@ -1,6 +1,8 @@
 #include "Logging.h"
 #include "Papyrus.h"
 #include "Papyrus/PapyrusVampirism.h"
+#include "Papyrus/PapyrusSettings.h"
+#include "Papyrus/PapyrusUtility.h"
 
 namespace Papyrus
 {
@@ -16,6 +18,8 @@ namespace Papyrus
 		VM = a_vm;
 
 		Vampirism::Register(a_vm);
+		PSettings::Register(a_vm);
+		PUtility::Register(a_vm);
 
 		LOG_1("{}[Papyrus] [Register] Papyrus functions have been registered.");
 		return true;

@@ -49,6 +49,9 @@ namespace Storage
 		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] Actors Saved To Last Savegame         {}", Stats::Storage_ActorsSavedLast);
 		LOG1_1("{}[DataStorage] [SaveGameCallback] [Statistics] Actors Read From Last Savegame        {}", Stats::Storage_ActorsReadLast);
 
+		// save any changed settings to disk
+		Settings::Save();
+
 		LOG_1("{}[DataStorage] [SaveGameCallback] end");
 	}
 

@@ -12,6 +12,7 @@ void ActorInfo::Init()
 	playerRef = RE::PlayerCharacter::GetSingleton();
 	data = Data::GetSingleton();
 	events = Events::EventHandler::GetSingleton();
+	calendar = RE::Calendar::GetSingleton();
 }
 
 ActorInfo::ActorInfo(RE::Actor* _actor)
@@ -878,6 +879,8 @@ int32_t ActorInfo::GetDataSize()
 		// 8
 		// disflagsprog
 		// 8
+				// disflagsinfec
+				// 8
 		// _processedinitialinfections
 		// 1
 		// _processedInitialInfectionsTime
@@ -894,7 +897,7 @@ int32_t ActorInfo::GetDataSize()
 
 
 		// all except string are constant:
-		size += 62;
+		size += 70;
 	}
 	dynamicsize += size;
 	for (int i = 0; i < Diseases::kMaxValue; i++)
@@ -944,6 +947,8 @@ int32_t ActorInfo::GetMinDataSize(int32_t vers)
 				// 8
 				// disflagsprog
 				// 8
+				// disflagsinfec
+				// 8
 				// _processedinitialinfections
 				// 1
 				// _ProcessedInitialInfectionsTime
@@ -960,7 +965,7 @@ int32_t ActorInfo::GetMinDataSize(int32_t vers)
 				size += 4 * Diseases::kMaxValue;
 
 				// all except string are constant:
-				size += 70;
+				size += 78;
 			}
 			return size;
 		}
@@ -1016,6 +1021,8 @@ bool ActorInfo::WriteData(unsigned char* buffer, int offset)
 	Buffer::Write(disflags, buffer, offset);
 	// disflagsprog
 	Buffer::Write(disflagsprog, buffer, offset);
+	// disflagsinfec
+	Buffer::Write(disflagsinfec, buffer, offset);
 	// _processedinitialinfections
 	Buffer::Write(_processedInitialInfections, buffer, offset);
 	// _processedInitialInfectionsTime
@@ -1140,6 +1147,7 @@ bool ActorInfo::ReadData(unsigned char* buffer, int offset, int length)
 				LastGameTime = Buffer::ReadFloat(buffer, offset);
 				disflags = Buffer::ReadUInt64(buffer, offset);
 				disflagsprog = Buffer::ReadUInt64(buffer, offset);
+				disflagsinfec = Buffer::ReadUInt64(buffer, offset);
 				_processedInitialInfections = Buffer::ReadBool(buffer, offset);
 				_processedInitialInfectionsTime = Buffer::ReadFloat(buffer, offset);
 				_removealldiseases = Buffer::ReadBool(buffer, offset);

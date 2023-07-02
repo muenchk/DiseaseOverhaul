@@ -1388,3 +1388,15 @@ void Data::PatchGameObjects()
 		}
 	}
 }
+
+
+void Data::RemoveAllDiseases()
+{
+	lockdata.acquire();
+	for (auto [key, acinfo] : actorinfoMap)
+	{
+		acinfo->RemoveAllDiseases();
+	}
+	
+	lockdata.release();
+}

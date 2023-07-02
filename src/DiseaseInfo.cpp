@@ -2,7 +2,7 @@
 #include "DiseaseInfo.h"
 
 
-void DiseaseInfo::WriteData(std::shared_ptr<DiseaseInfo> dinfo, unsigned char* buffer, int offset)
+void DiseaseInfo::WriteData(std::shared_ptr<DiseaseInfo> dinfo, unsigned char* buffer, int& offset)
 {
 	switch (version)
 	{
@@ -27,6 +27,8 @@ void DiseaseInfo::WriteData(std::shared_ptr<DiseaseInfo> dinfo, unsigned char* b
 			Buffer::Write(dinfo->permanentModifiersPoints, buffer, offset);
 			// permanentModifiers
 			Buffer::Write(dinfo->permanentModifiers, buffer, offset);
+			// LastPointGain
+			Buffer::Write(dinfo->LastPointGain, buffer, offset);
 			return;
 		}
 		else
@@ -39,7 +41,7 @@ void DiseaseInfo::WriteData(std::shared_ptr<DiseaseInfo> dinfo, unsigned char* b
 }
 
 
-std::shared_ptr<DiseaseInfo> DiseaseInfo::ReadData(unsigned char* buffer, int offset)
+std::shared_ptr<DiseaseInfo> DiseaseInfo::ReadData(unsigned char* buffer, int& offset)
 {
 	std::shared_ptr<DiseaseInfo> ptr;
 	uint32_t valid = Buffer::ReadUInt32(buffer, offset);
@@ -48,7 +50,7 @@ std::shared_ptr<DiseaseInfo> DiseaseInfo::ReadData(unsigned char* buffer, int of
 		{
 		case valid_ver1:
 			{
-				// valid total size 32
+				// valid total size 36
 				ptr = std::make_shared<DiseaseInfo>();
 				ptr->disease = static_cast<Diseases::Disease>(Buffer::ReadUInt32(buffer, offset));
 				ptr->stage = Buffer::ReadInt32(buffer, offset);
@@ -58,6 +60,7 @@ std::shared_ptr<DiseaseInfo> DiseaseInfo::ReadData(unsigned char* buffer, int of
 				ptr->immuneUntil = Buffer::ReadFloat(buffer, offset);
 				ptr->permanentModifiersPoints = Buffer::ReadFloat(buffer, offset);
 				ptr->permanentModifiers = Buffer::ReadUInt32(buffer, offset);
+				ptr->LastPointGain = Buffer::ReadFloat(buffer, offset);
 			}
 			return ptr;
 		case invalid_ver1:
@@ -90,7 +93,9 @@ int DiseaseInfo::GetDataSize(std::shared_ptr<DiseaseInfo> dinfo)
 			// 4
 			// permanentModifiers
 			// 4
-			return 32;
+			// LastPointGain
+			// 4
+			return 36;
 		}
 	}
 	else

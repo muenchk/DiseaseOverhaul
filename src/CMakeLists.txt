@@ -34,6 +34,8 @@ set(SOURCE_FILES
 	"${SOURCE_DIR}/VM.cpp"
 	"${SOURCE_DIR}/WeatherInfo.cpp"
 	"${SOURCE_DIR}/WorldspaceController.cpp"
+	"${SOURCE_DIR}/Papyrus/PapyrusSettings.cpp"
+	"${SOURCE_DIR}/Papyrus/PapyrusUtility.cpp"
 	"${SOURCE_DIR}/Papyrus/PapyrusVampirism.cpp"
 )
 

@@ -12,6 +12,7 @@ public:
 	static inline size_t MainHandler_ActorsHandledTotal = 0;
 	static inline std::vector<uint64_t> MainHandler_Particles_Times;
 	static inline int DiseaseStats_ProgressDisease = 0;
+	static inline int DiseaseStats_InfectionRegression = 0;
 
 #pragma region Events
 	/// <summary>

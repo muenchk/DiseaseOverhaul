@@ -23,7 +23,7 @@ ActorInfo::ActorInfo(RE::Actor* _actor)
 		diseases[i].reset();
 		diseasepoints[i] = 0;
 	}
-	LastGameTime = 0;
+	LastGameTime = calendar->gameDaysPassed->value;
 	currentticks = 0;
 	CalcDiseaseFlags();
 	if (_actor) {
@@ -90,7 +90,6 @@ void ActorInfo::Reset(RE::Actor* _actor)
 		diseases[i].reset();
 		diseasepoints[i] = 0;
 	}
-	LastGameTime = 0;
 	currentticks = 0;
 	CalcDiseaseFlags();
 	if (_actor) {

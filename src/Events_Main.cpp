@@ -582,9 +582,6 @@ namespace Events
 					}
 				}
 
-				PROF1_1("{}[Events] [HandleActors] execution time: Progress: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - last).count()));
-				last = std::chrono::steady_clock::now();
-
 				LOG_1("{}[Events] [HandleActors] kill actors");
 
 				// now kill those who have to die from sickness MUHAHAHA
@@ -614,6 +611,10 @@ namespace Events
 			}
 
 HandleActorsSkipIteration:
+
+			PROF1_1("{}[Events] [HandleActors] execution time: Progress: {} µs", std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - last).count()));
+			last = std::chrono::steady_clock::now();
+
 			// reset lists for next iteration
 			actors.clear();
 			actorsreduced.clear();
@@ -689,6 +690,7 @@ HandleActorsSkipIteration:
 
 		InitializeCompatibilityObjects();
 
+		World::GetSingleton()->Reset();
 		World::GetSingleton()->PlayerChangeCell(RE::PlayerCharacter::GetSingleton()->GetParentCell());
 
 		
